@@ -11756,7 +11756,7 @@ function welcomeShip(dt,b,g,K){ if(!FG) makeShip();
   FG.flare.material.opacity=on?0.9:0; FG.eng.intensity=on?2.4:0;
   FG.bow.material.opacity=Math.min(0.9,Math.max(0,Math.log10(Math.max(1,g*b))/4));
   const tt=performance.now()/1000; FG.nav.forEach((s,i)=>{ s.material.opacity=((tt+i*0.5)%1.2)<0.15?1:0.15; });
-  if(dt>0||WARP.on) FG.ring.rotation.z+=WARP.on?0.3:0.01;   /* the warp ring spins up */
+  if(dt>0||WARP.on) FG.ring.rotation.z+=WARP.on?0.08+0.35*Math.min(1,WARP.t/0.8):0.01;   /* the warp ring spins up */
   /* the chase camera: the same offset and distance as the flight sandbox's chase view */
   const cam2=FG.cam, D0=FG.dist*WEL.ozS, yw=WEL.oyS, pt=0.24+WEL.opS;   /* behind the ship by default; dragging orbits the camera round it, and the sky turns with it (welcomeSky uses the same angles) */
   cam2.position.set(-Math.sin(yw)*Math.cos(pt)*D0,Math.sin(pt)*D0,Math.cos(yw)*Math.cos(pt)*D0); cam2.up.set(0,1,0); cam2.lookAt(0,0,0.8);
@@ -11805,20 +11805,48 @@ function shipHelp(on){
    time (no time dilation, no acceleration felt), so your clock and Earth's agree after the jump. The price: a negative energy density
    (exotic matter) of order −c⁴/(G·R) per bubble, which no known physics supplies. The streaks and the crowding of the stars ahead are
    drawn for the eye; a real observer inside the bubble would see a sky heavily distorted by the curvature at its wall. */
-const WARP={on:false,t:0,T:3.2,p0:null,dir:null,n:0,msg:0};
+const WARP={on:false,t:0,T:4.2,p0:null,dir:null,n:0,msg:0,z:0,shk:0,TS:null,TC:null,TM:null};
 window.__warp=WARP;
-function warpGo(){ if(WARP.on) return; WARP.on=true; WARP.t=0; WARP.p0=WS.pos.clone(); WARP.dir=WS.dir.clone(); WARP.n++; WEL.thrust=false; }
-function warpOverlay(K,v){ const g=K.clear(); if(!(v>0.002)&&!(WARP.msg>0)) return; const W=K.W, H=K.H;
+function warpGo(){ if(WARP.on) return; WARP.on=true; WARP.t=0; WARP.z=0; WARP.p0=WS.pos.clone(); WARP.dir=WS.dir.clone(); WARP.n++; WEL.thrust=false; }
+const wSS=(a,b,x)=>{ const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); };
+/* phases of one jump, s = t/T: spool-up (stars stretch into lines), the jump flash, the corridor, the exit flash, stars snap back */
+function warpPhase(s){ const sp=wSS(0,0.2,s), tv=wSS(0.17,0.25,s)*(1-wSS(0.84,0.92,s)), fl=Math.max(Math.exp(-Math.pow((s-0.2)/0.025,2)),0.8*Math.exp(-Math.pow((s-0.885)/0.022,2))), back=1-wSS(0.9,1,s);
+  return {sp:s<0.5?sp:0,tv,fl,back:s>0.88?back:0}; }
+/* the corridor: a full-screen shader behind the ship. Streaks are lanes in (angle, 1/r): moving along 1/r is flying down the tube;
+   a twist in angle with depth gives the swirl; each colour channel samples a slightly different radius (chromatic smear of a lensing wall) */
+function warpTunnel(){ if(WARP.TS) return; WARP.TS=new THREE.Scene(); WARP.TC=new THREE.Camera();
+  WARP.TM=new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{uZ:{value:0},uA:{value:0},uAsp:{value:1},uC:{value:new THREE.Vector2()},uTw:{value:1}},
+   vertexShader:'varying vec2 vP; void main(){ vP=position.xy; gl_Position=vec4(position.xy,0.,1.); }',
+   fragmentShader:`varying vec2 vP; uniform float uZ,uA,uAsp,uTw; uniform vec2 uC;
+    float h(float n){ return fract(sin(n)*43758.5453); }
+    float nz(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); float n=i.x+i.y*57.; return mix(mix(h(n),h(n+1.),f.x),mix(h(n+57.),h(n+58.),f.x),f.y); }
+    float lane(vec2 p,float k,float N,float sc){ float r=length(p)*k, a=atan(p.y,p.x), z=0.42/max(r,1e-3), tw=a+uTw*z*0.16;
+      float c=(tw/6.2831853+0.5)*N, id=floor(c), f=fract(c), w=pow(max(0.,1.-abs(f-0.5)*2.2),7.);
+      float seg=fract(z*sc+uZ+h(id)*7.13), dash=smoothstep(0.,0.03,seg)*smoothstep(0.85,0.2,seg);
+      return w*dash*(0.25+0.95*h(id+3.1)); }
+    void main(){ vec2 p=(vP-uC)*vec2(uAsp,1.); float r=length(p), a=atan(p.y,p.x), z=0.42/max(r,1e-3);
+      vec3 col=vec3(0.006,0.012,0.04);
+      float wall=nz(vec2((a+uTw*z*0.16)*5.,z*1.1+uZ*2.6)); wall=pow(wall,2.6)*smoothstep(0.02,0.5,r);
+      col+=vec3(0.10,0.22,0.62)*wall*1.3+vec3(0.35,0.12,0.5)*pow(nz(vec2(a*3.+2.,z*0.6+uZ*1.4)),4.)*0.7*smoothstep(0.05,0.6,r);
+      vec3 st=vec3(lane(p,1.,110.,0.22),lane(p,1.014,110.,0.22),lane(p,1.03,110.,0.22));
+      st+=0.6*vec3(lane(p,1.,47.,0.09),lane(p,1.01,47.,0.09),lane(p,1.022,47.,0.09));
+      col+=st*vec3(0.85,0.95,1.25)*(0.4+1.6*smoothstep(0.03,0.9,r));
+      col+=vec3(0.85,0.92,1.)*exp(-r*14.)*1.6+vec3(0.3,0.5,1.)*exp(-r*4.)*0.45;
+      gl_FragColor=vec4(col,uA); }`});
+  const q=new THREE.Mesh(new THREE.PlaneGeometry(2,2),WARP.TM); q.frustumCulled=false; WARP.TS.add(q); }
+function warpOverlay(K,P){ const g=K.clear(); if(!WARP.on&&!(WARP.msg>0)) return; const W=K.W, H=K.H;
   const f=new THREE.Vector3(Math.cos(WEL.cp)*Math.cos(WEL.cy),Math.sin(WEL.cp),-Math.cos(WEL.cp)*Math.sin(WEL.cy)), q=WCAM.position.clone().addScaledVector(f,100).project(WCAM);
-  const cx=(q.x+1)/2*W, cy=(1-q.y)/2*H, R=Math.hypot(W,H), tt=performance.now()/1000;
-  if(v>0.002){ g.save(); g.globalCompositeOperation='lighter'; const r=K.rng?null:null; let sd=7; const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
-    for(let i=0;i<260;i++){ const a=rnd()*Math.PI*2, r0=(0.04+rnd()*0.9)*R*0.5, ph=(rnd()+tt*(0.6+1.6*v))%1, r1=r0*(0.25+ph*1.6), L=r1*(0.12+0.9*v)*(0.4+rnd());
-      g.strokeStyle='rgba('+(rnd()<0.3?'255,220,180':'170,210,255')+','+(v*0.55*(0.3+rnd()))+')'; g.lineWidth=0.6+rnd()*1.6*v; g.beginPath(); g.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1); g.lineTo(cx+Math.cos(a)*(r1+L),cy+Math.sin(a)*(r1+L)); g.stroke(); }
-    for(let k=0;k<7;k++){ const ph=(k/7+tt*0.9)%1, rr=Math.pow(ph,1.8)*R*0.7; g.strokeStyle='rgba(140,190,255,'+(v*0.22*(1-ph))+')'; g.lineWidth=2+6*ph; g.beginPath(); g.ellipse(cx,cy,rr,rr*0.82,0,0,Math.PI*2); g.stroke(); }   /* the corridor's walls */
-    const gl=g.createRadialGradient(cx,cy,0,cx,cy,R*0.18); gl.addColorStop(0,'rgba(220,235,255,'+(0.35*v)+')'); gl.addColorStop(1,'rgba(220,235,255,0)'); g.fillStyle=gl; g.fillRect(0,0,W,H);
-    if(v>0.97){ g.fillStyle='rgba(255,255,255,'+((v-0.97)*6)+')'; g.fillRect(0,0,W,H); } g.restore(); }
-  g.textAlign='center'; g.font='500 13px Figtree,system-ui,sans-serif'; const a=v>0.002?Math.min(1,v*3):Math.min(1,WARP.msg);
-  g.fillStyle='rgba(236,230,218,'+(0.85*a)+')'; g.fillText(v>0.002?'Warp drive on: the ring bends spacetime round the ship · 1 light-year in 3 s, by your clock and Earth’s alike (flat space inside the bubble, no time dilation)':'Jump '+WARP.n+' done · '+(WS.pos.length()*LYPC).toFixed(2)+' light-years from the Sun',cx,H-128); }
+  const cx=(q.x+1)/2*W, cy=(1-q.y)/2*H, R=Math.hypot(W,H);
+  if(WARP.on){ const st=Math.max(P.sp,P.back);
+    if(st>0.01){ /* Star Wars: every star stretches into a line pointing away from the vanishing point */ g.save(); g.globalCompositeOperation='lighter'; let sd=11; const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647; g.lineCap='round';
+      for(let i=0;i<340;i++){ const a=rnd()*Math.PI*2, r0=Math.pow(rnd(),0.7)*R*0.55, L=r0*(Math.exp(3.4*st)-1)*0.22, x0=cx+Math.cos(a)*r0, y0=cy+Math.sin(a)*r0, b=0.35+0.65*rnd();
+        const gr=g.createLinearGradient(x0,y0,x0+Math.cos(a)*L,y0+Math.sin(a)*L); gr.addColorStop(0,'rgba(200,225,255,'+(0.15*b*st)+')'); gr.addColorStop(1,'rgba(240,248,255,'+(0.95*b*st)+')');
+        g.strokeStyle=gr; g.lineWidth=0.7+1.4*b*st; g.beginPath(); g.moveTo(x0,y0); g.lineTo(x0+Math.cos(a)*L,y0+Math.sin(a)*L); g.stroke(); }
+      g.restore(); }
+    if(P.fl>0.01){ const gl=g.createRadialGradient(cx,cy,0,cx,cy,R*0.75); gl.addColorStop(0,'rgba(255,255,255,'+Math.min(1,P.fl*1.1)+')'); gl.addColorStop(0.35,'rgba(200,225,255,'+(0.85*P.fl)+')'); gl.addColorStop(1,'rgba(120,170,255,'+(0.35*P.fl)+')'); g.fillStyle=gl; g.fillRect(0,0,W,H); }
+    const vg=g.createRadialGradient(cx,cy,R*0.25,cx,cy,R*0.62); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,'+(0.55*Math.max(P.tv,P.sp*0.6))+')'); g.fillStyle=vg; g.fillRect(0,0,W,H); }
+  g.textAlign='center'; g.font='500 13px Figtree,system-ui,sans-serif'; const a=WARP.on?Math.min(1,P.tv*2):Math.min(1,WARP.msg);
+  g.fillStyle='rgba(236,230,218,'+(0.8*a)+')'; g.fillText(WARP.on?'Warp: the ring folds spacetime round the ship · 1 light-year in 3 s, by your clock and Earth’s alike':'Jump '+WARP.n+' done · '+(WS.pos.length()*LYPC).toFixed(2)+' light-years from the Sun',cx,H-128); }
 window.__relWelcome={
  /* drag (mouse or touchpad) to orbit round the ship and look at the sky behind it; scroll or pinch to zoom; double-click or double-tap to return behind it */
  orbit:{ rot(dx,dy){ WEL.oy+=dx*0.006; WEL.op=Math.max(-1.55,Math.min(1.1,WEL.op+dy*0.006)); },
@@ -11829,14 +11857,17 @@ window.__relWelcome={
    WS.pos.set(0,0,0); WS.dir.set(1,0,0); WS.yaw=0; WS.pitch=0; WEL.cy=0; WEL.cp=0; WS.phi=0; WS.beta=0; WEL.thrust=WEL.brake=WEL.l=WEL.r=WEL.u=WEL.d=false; WEL.sy=0; WEL.sp=0; if(FG) FG.hull.rotation.set(0,0,0); },
  leave(){ WEL.thrust=WEL.brake=WEL.l=WEL.r=WEL.u=WEL.d=false; shipHelp(false); },
  frame(dt,raw,K){ if(!scene||!pts||!WCAM) return; welcomeTurn(raw);
-   let wv=0; if(WARP.on){ WARP.t+=Math.min(0.1,raw); const s=Math.min(1,WARP.t/WARP.T), e=s*s*(3-2*s); WS.pos.copy(WARP.p0).addScaledVector(WARP.dir,e/LYPC); wv=Math.pow(Math.sin(Math.PI*s),0.7); if(s>=1){ WARP.on=false; WARP.msg=3; } } else { welcomeStep(dt); if(WARP.msg>0) WARP.msg-=raw; }
-   const WVB=(window.__wvOff?0:0.985)*wv, WVG=1/Math.sqrt(1-WVB*WVB);
+   let wv=0, WP={sp:0,tv:0,fl:0,back:0}; if(WARP.on){ const dr=Math.min(0.1,raw); WARP.t+=dr; const s=Math.min(1,WARP.t/WARP.T), e=wSS(0.2,0.88,s); WS.pos.copy(WARP.p0).addScaledVector(WARP.dir,e/LYPC); WP=warpPhase(s); wv=WP.tv; WARP.z+=dr*(0.15+1.9*WP.tv); WARP.shk=0.05*WP.sp*WP.sp+0.018*WP.tv+0.12*WP.fl;   /* streak phase integrated, so streaks always run outward (forward motion) */ if(s>=1){ WARP.on=false; WARP.msg=3; } } else { welcomeStep(dt); if(WARP.msg>0) WARP.msg-=raw; }
+   const WVB=0*wv, WVG=1/Math.sqrt(1-WVB*WVB);   /* no aberration in the bubble: crowding the stars ahead read as a reverse zoom; the outward streaks carry the motion */
    const b=WS.beta, g=1/Math.sqrt(Math.max(1e-30,1-b*b));
    mat.uniforms.uShip.value.copy(WS.pos); mat.uniforms.uU.value.copy(WS.dir); mat.uniforms.uB.value=WVB; mat.uniforms.uG.value=WVG; mat.uniforms.uExp.value=0; mat.uniforms.uPx.value=K.DPR;
    extFrame(WVB,WVG,WS);
    const u=ISM.uniforms; u.uShip.value.copy(WS.pos); u.uU.value.copy(WS.dir); u.uB.value=0; u.uG.value=1; u.uExp.value=0; u.uBoost.value=WBOOST;
    bgMat.uniforms.uU.value.copy(WS.dir); bgMat.uniforms.uB.value=0; bgMat.uniforms.uG.value=1; bgMat.uniforms.uExp.value=0;
-   welcomeSky(K); K.gl.render(scene,WCAM); welcomeShip(dt,b,g,K); warpOverlay(K,wv); } };
+   welcomeSky(K); K.gl.render(scene,WCAM);
+   if(WP.tv>0.001){ warpTunnel(); const f=new THREE.Vector3(Math.cos(WEL.cp)*Math.cos(WEL.cy),Math.sin(WEL.cp),-Math.cos(WEL.cp)*Math.sin(WEL.cy)), q=WCAM.position.clone().addScaledVector(f,100).project(WCAM), U=WARP.TM.uniforms;
+     U.uZ.value=WARP.z; U.uA.value=WP.tv; U.uAsp.value=K.W/K.H; U.uC.value.set(q.x,q.y); U.uTw.value=1+0.6*Math.sin(WARP.t*0.9); const r=K.gl; r.autoClear=false; r.render(WARP.TS,WARP.TC); r.autoClear=true; }
+   welcomeShip(dt,b,g,K); warpOverlay(K,WP); } };
 window.addEventListener('keydown',e=>{ if(S.cur!=='imm') return; const t=e.target; if(t&&(t.tagName==='TEXTAREA'||t.tagName==='SELECT'||(t.tagName==='INPUT'&&!/checkbox|button/.test(t.type)))) return;
   if(e.key==='j'||e.key==='J'){ warpGo(); if(!K.playing) K.playing=true; e.preventDefault(); return; }
   const k={ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',Shift:'thrust',' ':'brake'}[e.key]; if(!k) return; WEL[k]=true; if(k==='brake') WEL.thrust=false; else if(k==='thrust') WEL.brake=false;
@@ -16689,5 +16720,6 @@ window.LPlot=function(cv,st,xs,al,marks,dt,unit,key){ if(!cv||!cv.offsetParent) 
   g.fillText(names[k]+' '+(al[i]>0.9995&&al[i]<1?'1−'+fm(1-al[i]):al[i].toFixed(3)),tx,cy+r+11); });
  };
 </script>
+<div id="univCopy" style="position:fixed;right:14px;bottom:3px;z-index:9999;pointer-events:none;font:500 11px/1.4 system-ui,sans-serif;color:rgba(236,230,218,.62);white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6)">© 2026 Shivam Gola · all rights reserved</div><script>setInterval(()=>{ const c=document.getElementById('univCopy'); if(c&&c!==document.body.lastElementChild) document.body.appendChild(c); },1000);</script>
 </body>
 </html>
