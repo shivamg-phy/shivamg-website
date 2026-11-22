@@ -6938,7 +6938,7 @@ function sky(){ const k=S.jd.toFixed(7)+'|'+S.lat+'|'+S.lon; if(k!==stKey){ ST=P
 function enu(v){ return PA.mv(ST.M,v); }
 function apparent(h){ /* refraction lifts objects near the horizon; h is a unit ENU vector, returned adjusted */
   if(!S.L.atm||h[2]>0.36||h[2]<-0.035) return h;
-  const a=Math.asin(h[2])*R2D, a2=(a+PA.refr(a))*D2R, k=Math.hypot(h[0],h[1])||1e-9;
+  const a=Math.asin(h[2])*R2D, a2=(a+PA.refr(a)*(a<0?Math.max(0,(a+2)/2):1))*D2R,   /* below the horizon the lift fades to zero by −2°, so paths seen through the ground stay smooth */ k=Math.hypot(h[0],h[1])||1e-9;
   return [h[0]/k*cos(a2),h[1]/k*cos(a2),sin(a2)]; }
 /* limiting magnitude of the sky as it is now */
 function mlim(){ const sun=ST.bodies.Sun, hs=Math.asin(enu(sun.v)[2])*R2D, base=[7.6,7.1,6.6,6.2,5.8,5.3,4.8,4.3,3.8][S.bortle-1];
@@ -6951,7 +6951,7 @@ let F=[0,0,1],Rv=[1,0,0],U=[0,1,0],SC=1,CX=0,CY=0;
 function setView(){ if(S.dome){ S.alt=90; }
   const az=S.az*D2R, al=S.alt*D2R; F=[sin(az)*cos(al),cos(az)*cos(al),sin(al)]; Rv=[cos(az),-sin(az),0];
   U=[Rv[1]*F[2]-Rv[2]*F[1],Rv[2]*F[0]-Rv[0]*F[2],Rv[0]*F[1]-Rv[1]*F[0]];
-  CX=W/2; CY=H/2; SC=(Math.min(W,H*1.6)/2)/(2*Math.tan(S.fov*D2R/4)); }
+  CX=(window.__plFree&&innerWidth>=721)?Math.min(W,window.__plFree.r)/2:W/2; CY=H/2; SC=(Math.min(W,H*1.6)/2)/(2*Math.tan(S.fov*D2R/4)); }
 function proj(h,out){ const z=h[0]*F[0]+h[1]*F[1]+h[2]*F[2]; if(z<-0.6) return false; const k=2/(1+z);
   out[0]=CX+SC*k*(h[0]*Rv[0]+h[1]*Rv[1]+h[2]*Rv[2]); out[1]=CY-SC*k*(h[0]*U[0]+h[1]*U[1]+h[2]*U[2]); out[2]=z; return true; }
 function unproj(X,Y){ const a=(X-CX)/SC, b=-(Y-CY)/SC, r2=a*a+b*b, z=(4-r2)/(4+r2), q=(1+z)/2;
@@ -7268,7 +7268,10 @@ function ppInfo(){ if(!PP.on) return; const south=S.lat<0, Y=ppYear(S.jd), pv=pp
    `<dt>Pole (J2000 axes)</dt><dd>RA ${ra.toFixed(2)} h, Dec ${de>=0?'+':'−'}${Math.abs(de).toFixed(2)}°</dd><dt>Height above your horizon</dt><dd>${el.toFixed(1)}° (always your latitude)</dd>`; }
 function ppOn(on){ PP.on=on; $('plPolBtn').setAttribute('aria-pressed',String(on)); $('plPol').hidden=!on;
   if(on){ if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } ['plUp','plLay','plWh'].forEach(x=>$(x).hidden=true); PP.jd0=S.jd; play(false);
-    if(S.dome) setDome(false); S.az=S.lat<0?180:0; S.alt=clamp(Math.abs(S.lat),8,80); S.fov=110; S.track=false; setView(); }
+    if(S.dome) setDome(false); S.az=S.lat<0?180:0; S.alt=clamp(Math.abs(S.lat),8,80); S.fov=110; S.track=false;
+    /* aim at the centre of the precession circle (the ecliptic pole), so the whole 26 000-year circle sits in the free area */
+    try{ sky(); const e=enu(PA.vec(S.lat<0?90:270,S.lat<0?-66.5607:66.5607)), al=Math.asin(clamp(e[2],-1,1))*R2D; if(al>-5){ S.az=(Math.atan2(e[0],e[1])*R2D+360)%360; S.alt=clamp(al,12,80); } }catch(err){}
+    setView(); }
   else { PP.run=false; $('plPolRun').textContent='Animate 26 000 years'; $('plPolRun').setAttribute('aria-pressed','false'); if(PP.jd0!=null){ S.jd=PP.jd0; PP.jd0=null; } }
   kick(); setTimeout(ppInfo,30); }
 const CY_COL={Sun:'#ffd27a',Mercury:'#d2c2ae',Venus:'#fff0c8',Mars:'#ff9a6a',Jupiter:'#f2d6a4',Saturn:'#e8d28e'};
@@ -7519,14 +7522,15 @@ const GOBJ=[ /* name, RA°, Dec° (J2000) or {l,b}, kind, distance */
 const GKIND={c:['#ffd9b0','Galactic reference points'],n:['#ff8f7a','Star-forming nebulae (in the spiral arms)'],r:['#8fe3ff','Supernova remnants and X-ray binaries'],o:['#ffe08a','Open clusters (young, in the disc)'],g:['#ffc58a','Globular clusters (old, in the halo)'],x:['#c9a6ff','Other galaxies'],s:['#ece6da','Bright stars']};
 GOBJ.forEach(o=>{ const v=o[1].l!=null?g2e(sph(o[1].l,o[1].b)):sph(o[1],o[2]), q=e2g(v); o.v=v; o.l=(Math.atan2(q[1],q[0])*R2D+360)%360; o.b=Math.asin(clamp(q[2],-1,1))*R2D; });
 const SQ2=Math.SQRT2;
-function gmFit(){ const top=86, bot=96, side=24, w=W-2*side, h=H-top-bot, k=Math.min(w/(4*SQ2),h/(2*SQ2))*GM.zoom; return {k,ox:W/2+GM.cx,oy:top+h/2+GM.cy}; }
+function plFr(){ const f=window.__plFree; return f&&innerWidth>=721?{r:Math.min(W,f.r),b:Math.min(H,f.b)}:{r:W,b:H-96}; }   /* the free area: left of the right-hand cards, above the bar */
+function gmFit(){ const fr=plFr(), top=86, side=24, w=fr.r-2*side-(fr.r<W-40?70:0), h=fr.b-top-26, k=Math.min(w/(4*SQ2),h/(2*SQ2))*GM.zoom; return {k,ox:side+w/2+GM.cx,oy:top+h/2+GM.cy}; }
 /* (l, b) in degrees → screen; l = 0 in the middle, increasing to the left */
 function gmXY(l,b,F){ let L=((l+180)%360+360)%360-180; const lam=-L*D2R, ph=b*D2R, d=Math.sqrt(1+Math.cos(ph)*Math.cos(lam/2));
   return [F.ox+F.k*2*SQ2*Math.cos(ph)*Math.sin(lam/2)/d, F.oy-F.k*SQ2*Math.sin(ph)/d]; }
 function gmInv(X,Y,F){ const x=(X-F.ox)/F.k, y=-(Y-F.oy)/F.k; if(x*x/8+y*y/2>1) return null; const z=Math.sqrt(1-x*x/16-y*y/4);
   const lam=2*Math.atan2(z*x,2*(2*z*z-1)), ph=Math.asin(clamp(z*y,-1,1)); return [-lam*R2D,ph*R2D]; }
 /* the Milky Way glow, the never-rises zone and the part below your horizon, resampled into the projection */
-function gmRaster(F){ const key=[W,H,GM.zoom.toFixed(3),GM.cx|0,GM.cy|0,!!MWT,GM.hz,GM.nr,S.lat.toFixed(2),(ST&&ST.lst||0).toFixed(1),GM.band,(window.__mwlBands&&window.__mwlBands.ready())?1:0].join('|'); if(GM.key===key&&GM.cache) return GM.cache;
+function gmRaster(F){ const key=[W,H,F.ox|0,F.oy|0,F.k.toFixed(2),GM.zoom.toFixed(3),GM.cx|0,GM.cy|0,!!MWT,GM.hz,GM.nr,S.lat.toFixed(2),(ST&&ST.lst||0).toFixed(1),GM.band,(window.__mwlBands&&window.__mwlBands.ready())?1:0].join('|'); if(GM.key===key&&GM.cache) return GM.cache;
   const MB=GM.band!=='vis'&&window.__mwlBands&&window.__mwlBands.ready()?window.__mwlBands:null, BI=MB?MB.img(GM.band):null, BW=MB?MB.W:0, BH=MB?MB.H:0;
   const s=W>1400?3:2, w=Math.ceil(W/s), h=Math.ceil(H/s), c=GM.cache||document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'), im=x.createImageData(w,h), d=im.data;
   const mw=MWT, phi=S.lat*D2R;
@@ -7574,10 +7578,10 @@ function gmDraw(){ g.setTransform(DPR,0,0,DPR,0,0); g.fillStyle='#04050a'; g.fil
   /* the band's named sources and structures */
   if(GM.band!=='vis'&&window.__mwlBands&&window.__mwlBands.ready()){ g.font='600 11px Figtree,sans-serif'; g.textAlign='left'; window.__mwlBands.labels(GM.band).forEach(([l,b,t])=>{ const [X,Y]=gmXY(l,b,F); g.strokeStyle='#ffe2c0'; g.beginPath(); g.arc(X,Y,3,0,6.2832); g.stroke(); g.fillStyle='rgba(0,0,0,0.65)'; g.fillText(t,X+7,Y-5); g.fillStyle='#ffe2c0'; g.fillText(t,X+6,Y-6); }); }
   /* title */
-  g.textAlign='center'; g.fillStyle='#ece6da'; g.font='italic 400 22px Fraunces,Georgia,serif'; g.fillText(GM.band==='vis'?'The sky in galactic coordinates':'The sky in galactic coordinates · '+((window.__mwlBands&&window.__mwlBands.bands.find(x=>x.k===GM.band)||{}).name||''),W/2,40);
-  if(GM.band!=='vis'&&window.__mwlBands&&!window.__mwlBands.ready()){ g.font='500 13px Figtree,sans-serif'; g.fillStyle='#ffe2c0'; g.fillText('Integrating the Galaxy along 115 200 lines of sight for this band… '+Math.round(100*window.__mwlBands.prog())+' %',W/2,H/2); }
-  g.font='500 11.5px Figtree,sans-serif'; g.fillStyle='rgba(236,230,218,0.7)'; g.fillText('Galactic Centre in the middle · l grows to the left · the Milky Way’s disc along b = 0 · equal-area (Hammer–Aitoff) · drag to pan, scroll to zoom, click an object',W/2,60);
-  if(GM.hz) { g.fillStyle='rgba(159,224,176,0.85)'; g.fillText('green: your horizon at '+fmtT(S.jd)+' from '+S.place+' · darker side is below it'+(GM.nr?' · reddish: never rises from latitude '+S.lat.toFixed(1)+'°':''),W/2,H-80); } }
+  g.textAlign='center'; g.fillStyle='#ece6da'; g.font='italic 400 22px Fraunces,Georgia,serif'; g.fillText(GM.band==='vis'?'The sky in galactic coordinates':'The sky in galactic coordinates · '+((window.__mwlBands&&window.__mwlBands.bands.find(x=>x.k===GM.band)||{}).name||''),plFr().r/2,40);
+  if(GM.band!=='vis'&&window.__mwlBands&&!window.__mwlBands.ready()){ g.font='500 13px Figtree,sans-serif'; g.fillStyle='#ffe2c0'; g.fillText('Integrating the Galaxy along 115 200 lines of sight for this band… '+Math.round(100*window.__mwlBands.prog())+' %',plFr().r/2,H/2); }
+  g.font='500 11.5px Figtree,sans-serif'; g.fillStyle='rgba(236,230,218,0.7)'; g.fillText('Galactic Centre in the middle · l grows to the left · the Milky Way’s disc along b = 0 · equal-area (Hammer–Aitoff) · drag to pan, scroll to zoom, click an object',plFr().r/2,60);
+  if(GM.hz) { g.fillStyle='rgba(159,224,176,0.85)'; g.fillText('green: your horizon at '+fmtT(S.jd)+' from '+S.place+' · darker side is below it'+(GM.nr?' · reddish: never rises from latitude '+S.lat.toFixed(1)+'°':''),plFr().r/2,plFr().b-8); } }
 function gmPick(x,y){ let best=-1, bd=14; (GM.pts||[]).forEach(([X,Y,i])=>{ const d=Math.hypot(X-x,Y-y); if(d<bd){ bd=d; best=i; } }); return best; }
 function gmSelect(i){ const o=GOBJ[i]; if(!o) return; select({t:'dso',n:o[0],k:GKIND[o[3]][1].replace(/ \(.*\)/,''),v:o.v,rows:[['Distance',o[4]||'—']]}); kick(); }
 function gmSet(on){ if(!on&&typeof g3eOff==='function') g3eOff(); if(on&&typeof c3eOff==='function') c3eOff(); GM.on=on; $('plGMBtn').setAttribute('aria-pressed',String(on)); $('plGM').hidden=!on; root.classList.toggle('gmap',on); if(on){ GM.mini=root.classList.contains('mini'); root.classList.add('mini'); $('plSideBtn').setAttribute('aria-expanded','false'); } else if(!GM.mini){ root.classList.remove('mini'); $('plSideBtn').setAttribute('aria-expanded','true'); } if(on){ ['plUp','plLay','plCyc','plWh'].forEach(x=>{ const e=$(x); if(e) e.hidden=true; }); } kick(); }
@@ -7822,10 +7826,12 @@ function semDraw(){ { const pb=$('plBar'); if(pb) document.documentElement.style
   const G=semGeo(), TAU=2*Math.PI;
   /* free area: right of the left column, left of the object card, above the bar */
   const pnl=$('plSEM'), pr=(w<=720&&pnl&&!pnl.hidden)?pnl.getBoundingClientRect():null, rr=root.getBoundingClientRect();
-  const L0=w>900?372:16, R0=w-(w>900&&root.classList.contains('hasSel')?332:16), T0=w<=720?110:56, B0=pr?pr.top-rr.top-24:h-128, fw=R0-L0, fh=Math.max(120,B0-T0);
+  const PF=window.__plFree, stk=w>900&&PF;   /* wide: the orbit across the top, Earth · Moon · Sun side by side below, all left of the right-hand cards */
+  const L0=stk?16:w>900?372:16, R0=stk?Math.min(w,PF.r)-4:w-(w>900&&root.classList.contains('hasSel')?332:16), T0=stk?126:w<=720?110:56, B0=stk?Math.min(h-128,PF.b-30):pr?pr.top-rr.top-24:h-128, fw=R0-L0, fh=Math.max(120,B0-T0);
+  const topH=stk?fh*0.55:0;
   /* stars */ g.fillStyle='rgba(236,230,218,.5)'; for(let i=0;i<160;i++){ const x=(Math.sin(i*12.9898)*43758.5453%1+1)%1*w, y=(Math.sin(i*78.233)*12345.678%1+1)%1*h; g.fillRect(x,y,1,1); }
   /* ---- the orbit, seen obliquely from above the ecliptic (north up), Sun at the centre */
-  const big=fw>620, oW=big?fw*0.6:fw, cx=L0+oW/2, cy=T0+fh*(big?0.5:0.27), Ro=(SEM.zod!==false?0.6:1)*(big?Math.min(oW*0.4,fh*0.78):Math.min(fw*0.34,fh*0.42)), k=0.42;
+  const big=fw>620, oW=stk?fw:big?fw*0.6:fw, cx=L0+oW/2, cy=stk?T0+(topH-40)*0.5:T0+fh*(big?0.5:0.27), Ro=(SEM.zod!==false?0.6:1)*(stk?Math.min((fw-40)/4.2,(topH-50)/1.8)/(SEM.zod!==false?0.6:1):big?Math.min(oW*0.4,fh*0.78):Math.min(fw*0.34,fh*0.42)), k=0.42;
   if(!big) g.font='10px Inter,system-ui,sans-serif';
   const ca=Math.cos(0.6), sa_=Math.sin(0.6), P=(x,y,z)=>[cx+(x*ca+y*sa_)*Ro,cy-(-x*sa_+y*ca)*Ro*k-z*Ro*0.9];   /* seen from 34° round the ecliptic, so the axis tilt shows */
   const Q=P, scx=cx, scy=cy;   /* the Sun's own motion about the centre of mass is shown in its panel at the right */
@@ -7855,8 +7861,10 @@ function semDraw(){ { const pb=$('plBar'); if(pb) document.documentElement.style
   g.fillStyle='rgba(236,230,218,.9)'; g.fillText('Earth',E[0]+er*2.6+14,E[1]+4);
   g.fillStyle='rgba(236,230,218,.45)'; g.textAlign='left'; if(big) g.fillText('Not to scale: Earth, Moon enlarged; Moon’s orbit ×50; Sun ×13. + on Earth = Earth–Moon centre of mass.',L0+4,B0+18);
   /* ---- Earth up close: day and night, your place, the tilt as the Sun sees it from the side */
-  const gr=big?Math.min(fw-oW-30,fh*0.62)/2:Math.min(fw*0.3,fh*0.2), gx=big?L0+oW+(fw-oW)/2:L0+fw/2, gy=big?T0+fh*0.42:T0+fh*0.74;
-  semGlobe(g,gx,gy,Math.max(50,gr),G); try{ semExtra(g,{G,P,E,cx,cy,Ro,big,gx,gy,gr:Math.max(50,gr),B0,L0,T0,cw:big?fw-oW:fw}); }catch(e){ if(!SEM.xe){ SEM.xe=1; console.error(e); } } }
+  let gr=big?Math.min(fw-oW-30,fh*0.62)/2:Math.min(fw*0.3,fh*0.2), gx=big?L0+oW+(fw-oW)/2:L0+fw/2, gy=big?T0+fh*0.42:T0+fh*0.74, lay=null;
+  if(stk){ /* Earth, then the Moon, then the Sun: sizes 1 : 0.84 : 0.72, in a row under the orbit */ const bh=B0-(T0+topH)-56, r1=Math.max(40,Math.min(bh/2,(fw-80)/(2*(1+0.84+0.72)))), r2=r1*0.84, r3=r1*0.72, gap=(fw-2*(r1+r2+r3))/4, yb=T0+topH+14+r1;
+    gr=r1; gx=L0+gap+r1; gy=yb; lay={mx:gx+r1+gap+r2,my:yb+(r1-r2)*0.5,mr:r2,sx:gx+r1+2*gap+2*r2+r3,sy:yb+(r1-r3)*0.5,sr:r3,ty:T0+topH-30}; }
+  semGlobe(g,gx,gy,Math.max(stk?40:50,gr),G); try{ semExtra(g,{G,P,E,cx,cy,Ro,big,gx,gy,gr:Math.max(stk?40:50,gr),B0,L0,T0,cw:big?fw-oW:fw,lay}); }catch(e){ if(!SEM.xe){ SEM.xe=1; console.error(e); } } }
 /* ---- Sun · Earth · Moon extras: the zodiac behind the Sun and Moon, and the Moon's face as seen tonight ---- */
 const ZOD=[['Pisces',351.6],['Aries',28.7],['Taurus',53.4],['Gemini',90.1],['Cancer',117.9],['Leo',138.0],['Virgo',173.9],['Libra',217.8],['Scorpius',241.0],['Ophiuchus',247.7],['Sagittarius',266.3],['Capricornus',299.7],['Aquarius',327.5]];
 function zodOf(lamDeg){ const l=((lamDeg%360)+360)%360; let k=0; for(let i=0;i<13;i++){ const a=ZOD[i][1], b=ZOD[(i+1)%13][1]; if(a<b?(l>=a&&l<b):(l>=a||l<b)){ k=i; break; } } return k; }
@@ -7892,7 +7900,7 @@ function semSunPanel(g,x,y,r){ const TAU=2*Math.PI, RS=0.00465, k=r/2.7/RS, T=(S
     g.fillStyle=c; g.beginPath(); g.arc(px,py,2.6,0,TAU); g.fill(); g.fillStyle='rgba(236,230,218,.7)'; g.fillText(n,x+Math.cos(a)*(r+16),y-Math.sin(a)*(r+12)+3); });
   const dR=Math.hypot(so[0],so[1],so[2])/RS; g.font='10.5px Inter,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.85)'; g.fillText('The Sun now',x,y+r+16);
   g.fillStyle='rgba(236,230,218,.55)'; g.fillText('centre '+dR.toFixed(2)+' R☉ from + (mass centre)',x,y+r+30); g.fillText('to scale · orange: last 30 yr',x,y+r+43); }
-function semExtra(g,o){ const {G,P,E,cx,cy,Ro,big,gx,gy,gr,B0,L0,T0,cw}=o, TAU=2*Math.PI;
+function semExtra(g,o){ const {G,P,E,cx,cy,Ro,big,gx,gy,gr,B0,L0,T0,cw,lay}=o, TAU=2*Math.PI;
   if(!SEM.zb){ SEM.zb=1; const run=$('plSemRun'); if(run){ const b=document.createElement('button'); b.type='button'; b.textContent='Zodiac ring'; b.setAttribute('aria-pressed','true'); b.title='The constellations the Sun and the Moon appear in front of';
     b.onclick=()=>{ SEM.zod=SEM.zod===false; b.setAttribute('aria-pressed',String(SEM.zod!==false)); kick(); }; run.appendChild(b); } }
   if(SEM.zod!==false){ const ce=Math.cos(G.eps), se=Math.sin(G.eps), Rz=1.66, kS=zodOf(G.lS*R2D), kM=zodOf(G.lM*R2D);
@@ -7906,12 +7914,12 @@ function semExtra(g,o){ const {G,P,E,cx,cy,Ro,big,gx,gy,gr,B0,L0,T0,cw}=o, TAU=2
     /* where the Sun and the Moon appear from Earth: directions, since the stars are effectively infinitely far */
     const sS=Q(G.lS,0), sM=Q(G.lM,0); g.setLineDash([2,5]); g.lineWidth=1; g.strokeStyle='rgba(255,220,150,.45)'; g.beginPath(); g.moveTo(E[0],E[1]); g.lineTo(sS[0],sS[1]); g.stroke(); g.strokeStyle='rgba(220,225,235,.45)'; g.beginPath(); g.moveTo(E[0],E[1]); g.lineTo(sM[0],sM[1]); g.stroke(); g.setLineDash([]);
     g.fillStyle='#ffd88a'; g.beginPath(); g.arc(sS[0],sS[1],4,0,TAU); g.fill(); g.fillStyle='#e9e6dc'; g.beginPath(); g.arc(sM[0],sM[1],3.4,0,TAU); g.fill();
-    const ty=Math.min(yMax+26,B0-46); g.textAlign='center'; g.font='600 '+(big?12:10.5)+'px Inter,system-ui,sans-serif'; g.fillStyle='rgba(255,236,190,.95)'; g.fillText('From Earth: the Sun is in front of '+ZOD[kS][0]+', the Moon in front of '+ZOD[kM][0],cx,ty);
+    const ty=lay?Math.min(yMax+22,lay.ty):Math.min(yMax+26,B0-46); g.textAlign='center'; g.font='600 '+(big?12:10.5)+'px Inter,system-ui,sans-serif'; g.fillStyle='rgba(255,236,190,.95)'; g.fillText('From Earth: the Sun is in front of '+ZOD[kS][0]+', the Moon in front of '+ZOD[kM][0],cx,ty);
     g.font=(big?11:9.5)+'px Inter,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.55)'; g.fillText('Same stars again after 27.32 days, same phase only after 29.53: the Sun has moved on meanwhile.',cx,ty+15); g.textAlign='left'; }
   /* the Moon's face */
   /* below the globe, side by side: the Moon's face (left) and the Sun about the centre of mass (right) */
-  let mr=big?Math.min(gr*0.4,(B0-(gy+gr+30))/2-30,(cw-56)/4):Math.min(34,gr*0.6), off=mr+22, mx=big?gx-off:gx+gr+mr+26, my=big?gy+gr+34+mr:gy; if(mr<14) return;
-  if(big) semSunPanel(g,gx+off,my,mr); else if(gx-gr-2*mr-30>L0) semSunPanel(g,gx-gr-mr-26,my,mr);
+  let mr=big?Math.min(gr*0.4,(B0-(gy+gr+30))/2-30,(cw-56)/4):Math.min(34,gr*0.6), off=mr+22, mx=big?gx-off:gx+gr+mr+26, my=big?gy+gr+34+mr:gy; if(lay){ mr=lay.mr; mx=lay.mx; my=lay.my; } if(mr<14) return;
+  if(lay) semSunPanel(g,lay.sx,lay.sy,lay.sr); else if(big) semSunPanel(g,gx+off,my,mr); else if(gx-gr-2*mr-30>L0) semSunPanel(g,gx-gr-mr-26,my,mr);
   const psi=G.psi, wax=(((G.lM-G.lS)%TAU)+TAU)%TAU<Math.PI, lit=(1-Math.cos(psi))/2, c=Math.abs(Math.cos(psi));
   moonFace(g,mx,my,mr,psi,wax);
   const pd=psi*R2D, nm=pd<8?'New Moon':pd<82?(wax?'Waxing crescent':'Waning crescent'):pd<98?(wax?'First quarter':'Last quarter'):pd<172?(wax?'Waxing gibbous':'Waning gibbous'):'Full Moon', age=(wax?pd:360-pd)/360*29.53;
@@ -10033,6 +10041,10 @@ function Orbit(cam,o){ const d=Object.assign({dist:10,yaw:0.6,pitch:0.4,tgt:[0,0
 
 /* ---------------------------------------------------------------- renderer and sizing */
 function gl(){ if(!R3){ R3=new THREE.WebGLRenderer({canvas:glCv,antialias:true,powerPreference:'high-performance'}); R3.setClearColor(0x000000,1); R3.setPixelRatio(DPR); R3.setSize(W,H,false); } return R3; }
+function under(h){ /* a slot of height h in the right-hand column, under the card; the card gives up height for it. null when there is no column */
+  const c=$('sbkCard'); if(!c||c.offsetParent===null||innerWidth<=1100) return null; const r0=root.getBoundingClientRect(); let r=c.getBoundingClientRect();
+  if(!c.classList.contains('fold')){ const avail=H-(r.top-r0.top)-14, mh=Math.max(150,avail-h-8)+'px'; if(c.style.maxHeight!==mh){ c.style.maxHeight=mh; r=c.getBoundingClientRect(); } }
+  return {x:r.left-r0.left,y:r.bottom-r0.top+8,w:r.width,h}; }
 function viewW(){ /* the free width beside the card on wide screens: modes centre their scene there */
   const c=$('sbkCard'); if(!c||c.offsetParent===null||innerWidth<=1100) return W; const r=c.getBoundingClientRect(); return Math.max(320,r.left-12); }
 /* the free rectangle for a mode's main drawing: below the header, above the bar, beside the card */
@@ -10154,7 +10166,7 @@ function go(key){ if(!modes[key]) return; if(cur&&cur.key===key) return; if(wind
   if(fading){ pendingKey=key; return; }
   if(cur){ fading=true; pendingKey=key; $('sbkFade').classList.add('on'); setTimeout(()=>{ if(!fading||!pendingKey||!modes[pendingKey]){ fading=false; $('sbkFade').classList.remove('on'); return; } go0(pendingKey); requestAnimationFrame(()=>{ $('sbkFade').classList.remove('on'); fading=false; }); },320); return; } go0(key); }
 let pendingKey=null;
-function go0(key){ if(cur){ setPlay(false); if(cur.leave) try{ cur.leave(K); }catch(e){ console.error(e); } }
+function go0(key){ try{ $('sbkCard').style.maxHeight=''; }catch(e){} if(cur){ setPlay(false); if(cur.leave) try{ cur.leave(K); }catch(e){ console.error(e); } }
   const m=modes[key]; cur=m; $('sbkSw').value=key; msg(null);
   /* a mode with noTime runs at 1× and always plays: hide Pause and the speed buttons for it */ $('sbkPlay').parentElement.style.display=m.noTime?'none':''; if(m.noTime&&$('sbkSpd').textContent!=='1×') $('sbkSpd').click();
   $('sbkLeg').innerHTML=''; $('sbkSub').innerHTML=''; $('sbkBig').innerHTML=''; ep(''); $('sbkSlot').innerHTML=''; PRE.innerHTML='';
@@ -10197,7 +10209,7 @@ function worker(src){ try{ const url=URL.createObjectURL(new Blob([src],{type:'t
 const K={PI,TAU,D2R,lg,clamp,lerp,sstep,sup,sci,sig,CC,Plot,decTicks,linTicks,Orbit,bb,rng,sprite,worker,b64f32,b64u8,el,slider,seg,chk,ro,tabs,chart,head,legend,ep,presets,presetOn,msg,label,charts:[],_li:0,
   get W(){ return W; },get H(){ return H; },get DPR(){ return DPR; },get g(){ return og; },get ov(){ return ov; },get gl(){ return gl(); },get viewW(){ return viewW(); },
   get playing(){ return playing; },set playing(v){ setPlay(v); },get speed(){ return speed; },
-  mark(n){ dirty=Math.max(dirty,n||2); }, box(minTop){ return freeBox(minTop); }, chartsDirty(){ K.charts.forEach(c=>c.dirty=true); }, slot(){ return $('sbkSlot'); }, card(){ return $('sbkCard'); },
+  mark(n){ dirty=Math.max(dirty,n||2); }, box(minTop){ return freeBox(minTop); }, under(h){ return under(h); }, chartsDirty(){ K.charts.forEach(c=>c.dirty=true); }, slot(){ return $('sbkSlot'); }, card(){ return $('sbkCard'); },
   clear(){ og.setTransform(DPR,0,0,DPR,0,0); og.clearRect(0,0,W,H); return og; } };
 return {add,open,close,go,K,modes,order,get cur(){ return cur?cur.key:null; }};
 })();
@@ -13350,6 +13362,7 @@ S.add({key:'lens3d',name:'Gravitational lensing',blurb:'Bend light round a black
   CH=K.chart(cd,140,(g,w,h)=>{ const n=Math.max(10,hist.length), PL=K.Plot(g,{x:0,y:0,w,h},{xr:[0,n],yr:[1,Math.max(3,...hist)],pad:{l:40,r:8,t:8,b:26}});
    PL.axes(K.linTicks(0,n,4,v=>''),K.linTicks(1,Math.max(3,...hist,3),3),'time →','magnification'); PL.line(hist.map((_,i)=>i),hist,CC.am,2); });
   cd.append(K.el('p','src xm','Drag the view to walk round the lens; scroll or pinch to move towards it or away (that changes D_L). With the drift off, shift-drag places the source. Distances: angular-diameter distances from the redshifts (flat ΛCDM, Planck 2018); inside the Galaxy D_LS = D_S − D_L. Point lens: θ_E = √(4GM/c² · D_LS/(D_L D_S)), images θ± = ½(β ± √(β² + 4θ_E²)), A = (u² + 2)/(u√(u² + 4)). Galaxy: an elliptical isothermal sphere with shear; cluster: five isothermal haloes. Transverse sizes are magnified so the angles can be seen; distances along the line of sight are to scale. The black hole’s shadow is drawn ~10⁸ times too large to be visible.')); },
+ leave(){ const c=document.getElementById('sbkCard'); if(c) c.style.maxHeight=''; },
  enter(K){ if(!scene) build(); this.orbit=orbit; K.playing=true;
   K.presets([{name:'Einstein ring'},{name:'Two images'},{name:'Einstein cross'},{name:'Giant arcs'},{name:'Microlensing light curve'}],(p,i)=>pre(i),-1);
   K.head('Immersive universe','Gravitational lensing','Drag to walk round the lens · scroll to fly towards it'); },
@@ -13376,7 +13389,7 @@ S.add({key:'lens3d',name:'Gravitational lensing',blurb:'Bend light round a black
   R.set('ip',pt?sig(tp,3)+' θ_E / '+sig(tm,3)+' θ_E':(b<1?'4 images (cross) or arcs':'2 images'));
   R.set('ex',s.ex);
   /* side view: you, the lens and the source to scale along the line of sight, with the two image rays */
-  const g=K.clear(), B=K.box(), w=Math.min(380,B.w-10), h=92, x0=B.x, y0=B.y+B.h-h;
+  const g=K.clear(), B=K.box(), U=K.under(92), w=U?U.w:Math.min(380,B.w-10), h=92, x0=U?U.x:B.x, y0=U?U.y:B.y+B.h-h;   /* in the right-hand column, under the card */
   g.save(); g.fillStyle='rgba(8,8,11,0.6)'; g.strokeStyle='rgba(236,230,218,0.16)'; g.beginPath(); g.roundRect?g.roundRect(x0,y0,w,h,12):g.rect(x0,y0,w,h); g.fill(); g.stroke();
   const L=w-36, X0=x0+18, Xl=X0+L*DLc/DSc, Xs=X0+L, Y=y0+50, fy=26;
   g.strokeStyle='rgba(236,230,218,0.25)'; g.setLineDash([3,4]); g.beginPath(); g.moveTo(X0,Y); g.lineTo(Xs,Y); g.stroke(); g.setLineDash([]);
@@ -13749,7 +13762,7 @@ S.add({key:'light',name:'Light across cosmic time',blurb:'The whole history from
    universe is built from the Big Bang as time runs, with a glowing slice for "now" (its colour is the blackbody
    colour of the radiation at that moment) and the camera following it. Drives itself from Cosmic history's clock.
    ===================================================================================================== */
-const HF={on:true,cv:null,R3:null,scene:null,cam:null,pts:null,grid:null,slice:null,ring:null,earth:null,gal:null,lab:null,yaw:0.62,pitch:0.26,zoom:1,dist:6,tg:new THREE.Vector3(),drag:null,btn:null};
+const HF={ride:false,ry:0.35,rp:0.12,on:true,cv:null,R3:null,scene:null,cam:null,pts:null,grid:null,slice:null,ring:null,earth:null,gal:null,lab:null,yaw:0.62,pitch:0.26,zoom:1,dist:6,tg:new THREE.Vector3(),drag:null,btn:null};
 function hfBuild(root){ const save=MODE; MODE='hist';
   HF.cv=document.createElement('canvas'); HF.cv.id='histFn'; HF.cv.setAttribute('aria-label','The whole history of the universe as one picture. Drag to turn, scroll to zoom.');
   root.insertBefore(HF.cv,document.getElementById('histGl').nextSibling);
@@ -13757,7 +13770,7 @@ function hfBuild(root){ const save=MODE; MODE='hist';
   const st=document.createElement('style'); st.textContent=`#histFn{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;z-index:1}
 #histFn[hidden],#histFnL[hidden]{display:none}#histFnL{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden}
 #histFnL span{position:absolute;left:0;top:0;white-space:nowrap;font:500 11.5px/1 var(--sans,Figtree,system-ui,sans-serif);color:#ece6da;text-shadow:0 1px 3px #000}
-#histFnL span.dim{color:#bdb6a8;font-weight:400}#histFnL span.now{color:#ffd9b0;font-weight:600;font-size:12.5px}#histFnL span.bg{color:#ffcf9a;font-weight:600}#histFnL span.src{color:#bfe0ff;font-weight:600}#histFnL span::before{content:'– ';color:#8f8a80}`; document.head.appendChild(st);
+#histFnL span.dim{color:#bdb6a8;font-weight:400}#histFnL span.now{color:#ffd9b0;font-weight:600;font-size:12.5px}#histFnL span.bg{color:#ffcf9a;font-weight:600}#histFnL span.src{color:#bfe0ff;font-weight:600}#histFnL span.obj{color:#cfe6ff;font-weight:500}#histFnL span.obj::before{content:'◦ ';color:#9fc4ff}#histFnL span::before{content:'– ';color:#8f8a80}`; document.head.appendChild(st);
   HF.R3=new THREE.WebGLRenderer({canvas:HF.cv,antialias:true}); HF.R3.setPixelRatio(Math.min(2,devicePixelRatio||1)); HF.R3.localClippingEnabled=true; HF.R3.setClearColor(0x000000,1);
   HF.scene=new THREE.Scene(); HF.cam=new THREE.PerspectiveCamera(48,1,0.005,2000);
   const clip=new THREE.Plane(new THREE.Vector3(-1,0,0),0); HF.clip=clip;
@@ -13783,7 +13796,7 @@ function hfBuild(root){ const save=MODE; MODE='hist';
   HF.bb=sprite(0xfff1d8,0.5); HF.scene.add(HF.bb); HF.sun=sprite(0xffd27a,0.4); HF.sun.position.set(Xof(9.2),0,0); HF.scene.add(HF.sun);
   /* controls: drag to turn, scroll or pinch to zoom */
   HF.cv.addEventListener('pointerdown',e=>{ HF.drag=[e.clientX,e.clientY]; HF.cv.setPointerCapture(e.pointerId); HF.cv.style.cursor='grabbing'; });
-  HF.cv.addEventListener('pointermove',e=>{ if(!HF.drag) return; HF.yaw-=(e.clientX-HF.drag[0])*0.006; HF.pitch=clamp(HF.pitch+(e.clientY-HF.drag[1])*0.005,-1.3,1.3); HF.drag=[e.clientX,e.clientY]; });
+  HF.cv.addEventListener('pointermove',e=>{ if(!HF.drag) return; if(HF.ride){ HF.ry-=(e.clientX-HF.drag[0])*0.004; HF.rp=clamp(HF.rp+(e.clientY-HF.drag[1])*0.004,-1.3,1.3); HF.drag=[e.clientX,e.clientY]; return; } HF.yaw-=(e.clientX-HF.drag[0])*0.006; HF.pitch=clamp(HF.pitch+(e.clientY-HF.drag[1])*0.005,-1.3,1.3); HF.drag=[e.clientX,e.clientY]; });
   const up=()=>{ HF.drag=null; HF.cv.style.cursor='grab'; }; HF.cv.addEventListener('pointerup',up); HF.cv.addEventListener('pointercancel',up);
   HF.cv.addEventListener('wheel',e=>{ e.preventDefault(); if(MG.emb&&!MG.leave){ MG.edT=null; MG.ed=clamp(MG.ed*Math.exp(e.deltaY*0.0012),3e-10,700); if(MG.ed<20) MG.tgT=[0,0,0]; return; } HF.zoom=clamp(HF.zoom*Math.exp(e.deltaY*0.0012),0.15,6); },{passive:false});
   /* the switch between this view and the close-up box, in the timeline bar */
@@ -13791,7 +13804,9 @@ function hfBuild(root){ const save=MODE; MODE='hist';
     row.insertBefore(g,row.children[1]); g.querySelectorAll('button').forEach(b=>b.onclick=()=>{ HF.on=b.dataset.v==='1'; g.querySelectorAll('[data-v]').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); if(MG.ui) MG.ui.hidden=!HF.on; }); HF.btn=g;
     const m=document.createElement('div'); m.className='hb'; m.setAttribute('role','group'); m.setAttribute('aria-label','How to draw spacetime');
     m.innerHTML='<button type="button" data-mg="S" aria-pressed="false" title="Today’s slice of the funnel opens into the whole observable universe: every catalogued galaxy in 3D round us, and the CMB">Full observable universe</button>';
-    row.insertBefore(m,g.nextSibling); m.querySelector('[data-mg="S"]').onclick=()=>{ if(!HF.on) g.querySelector('[data-v="1"]').click(); const on=MG.state!=='S';
+    const rb=document.createElement('button'); rb.type='button'; rb.setAttribute('aria-pressed','false'); rb.title='Ride inside the funnel with the present, from the Big Bang to today, looking back at the past; drag to look around'; rb.textContent='Ride inside'; m.appendChild(rb);
+    rb.onclick=()=>{ if(!HF.on) g.querySelector('[data-v="1"]').click(); HF.ride=!HF.ride; rb.setAttribute('aria-pressed',String(HF.ride)); if(HF.ride){ if(MG.state!=='F') mgSet('F'); HF.ry=0.35; HF.rp=0.12; const H=window.__hist; if(H){ H.U=0; H.playing=true; } } };
+    row.insertBefore(m,g.nextSibling); m.querySelector('[data-mg="S"]').onclick=()=>{ if(!HF.on) g.querySelector('[data-v="1"]').click(); if(HF.ride){ HF.ride=false; rb.setAttribute('aria-pressed','false'); } const on=MG.state!=='S';
       if(!on&&MG.emb){ MG.leave=true; MG.edT=MG.ed0; MG.tgT=[0,0,0]; window.__obsuEmbed.set({cone:false}); MG.lc.setAttribute('aria-pressed','false'); return; } mgSet(on?'S':'F'); }; MG.ui=m; MG.go=null;
     /* inside the universe: the light cone, and a few places to fly to (scroll zooms all the way down to Earth's orbit) */
     const ex=document.createElement('span'); ex.hidden=true; ex.style.cssText='display:none;gap:6px;align-items:center'; ex.innerHTML='<button type="button" aria-pressed="false" title="Lift a slab of the universe to the moment its light left: our past light cone">Light cone</button><span style="position:relative;display:inline-block"><button type="button" class="mgFly" aria-haspopup="menu" aria-expanded="false">Fly to ▴</button><div class="mgMenu" role="menu" hidden></div></span>';
@@ -13800,7 +13815,13 @@ function hfBuild(root){ const save=MODE; MODE='hist';
     const shut=()=>{ menu.hidden=true; fb.setAttribute('aria-expanded','false'); }; fb.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; fb.setAttribute('aria-expanded',String(!menu.hidden)); }; document.addEventListener('click',e=>{ if(!ex.contains(e.target)) shut(); });
     MG.lc.onclick=()=>{ const E=window.__obsuEmbed, on=!E.cone; E.set({cone:on}); MG.lc.setAttribute('aria-pressed',String(on)); MG.tgT=[0,0,0]; if(on){ HF.pitch=0.28; MG.edT=MG.ed0*1.35; MG.tgT=[0,-38,0]; } else { HF.pitch=0.45; MG.edT=MG.ed0; } };
     const V=window.__obsuEmbed?window.__obsuEmbed.views():[]; const go=v=>{ if(!v) return; if(window.__obsuEmbed.cone){ window.__obsuEmbed.set({cone:false}); MG.lc.setAttribute('aria-pressed','false'); } MG.tgT=v.t.slice(); MG.edT=v.d; HF.pitch=v.p; if(v.y!=null) HF.yaw=v.y; };
-    V.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.textContent=v.name; b.onclick=()=>{ shut(); go(v); }; menu.appendChild(b); }); }
+    V.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.textContent=v.name; b.onclick=()=>{ shut(); go(v); }; menu.appendChild(b); });
+    /* one row of four exclusive views: Funnel · Ride inside · Observable universe · Close-up; the light-cone extras follow only inside the universe */
+    { const fB=g.querySelector('[data-v="1"]'), cB=g.querySelector('[data-v="0"]'), sB=m.querySelector('[data-mg="S"]'); fB.textContent='Funnel'; sB.textContent='Observable universe'; g.setAttribute('role','group'); g.setAttribute('aria-label','View');
+      g.insertBefore(rb,cB); g.insertBefore(sB,cB);
+      const sync=()=>{ const md=!HF.on?'c':HF.ride?'r':(MG.state==='S'||MG.emb)?'s':'f'; [[fB,'f'],[rb,'r'],[sB,'s'],[cB,'c']].forEach(([b,k])=>b.setAttribute('aria-pressed',String(md===k))); m.style.display=(MG.emb&&HF.on)?'':'none'; };
+      const of=fB.onclick, oc=cB.onclick; fB.onclick=()=>{ of(); if(HF.ride) HF.ride=false; if(MG.state==='S'||MG.emb) sB.onclick(); sync(); }; cB.onclick=()=>{ HF.ride=false; oc(); sync(); };
+      g.addEventListener('click',()=>setTimeout(sync,0)); setInterval(sync,300); sync(); } }
   MODE=save; }
 
 /* ---- the close-up, live, in a small window: the physics happening at this moment (plasma, scattering, nuclei, atoms, stars) */
@@ -13990,7 +14011,8 @@ function hfInset(root,on){ let box=document.getElementById('histInset'); const w
 #histInset #histGl{position:absolute;inset:0;width:100%;height:100%}#histInset #histLbl{position:absolute;inset:0;pointer-events:none}#histInset #histLbl span{font-size:10px!important}
 #histInset .k{position:absolute;left:10px;top:7px;margin:0;z-index:2;font:600 10px/1 var(--sans,Figtree,system-ui,sans-serif);letter-spacing:.1em;text-transform:uppercase;color:#ffd9b0;text-shadow:0 1px 3px #000;pointer-events:none}
 #histInset .ex{position:absolute;right:6px;top:4px;z-index:2;width:26px;height:24px;border-radius:7px;border:1px solid rgba(236,230,218,.25);background:rgba(10,10,12,.7);color:#ece6da;cursor:pointer;font-size:14px;line-height:1}
-#hist.insetOn #histCard{max-height:calc(100% - 360px)!important}`; document.head.appendChild(st); }
+#hist.insetOn #histCard{max-height:calc(100% - 360px)}
+@media (min-width:900px){#histInset{width:340px;height:170px}#histCard{width:340px!important}#histPh{left:auto!important;right:22px;width:340px!important}#histPh canvas{height:64px}}`; document.head.appendChild(st); }
   const gl=document.getElementById('histGl'), lb=document.getElementById('histLbl');
   /* switching between the whole history and the close-up: the close-up grows out of its window to fill the screen (and shrinks back),
      while the funnel fades behind it */
@@ -13998,13 +14020,15 @@ function hfInset(root,on){ let box=document.getElementById('histInset'); const w
     HF.wp=want; HF.ia=null; chxFull(root,!on);
     if(HF.ia&&box&&gl){ const A=HF.ia, x=Math.min(1,(now-A.t0)/520), e=x*x*(3-2*x), rb=root.getBoundingClientRect(), bar=document.getElementById('histBar'), bt=bar?bar.getBoundingClientRect().top-rb.top:rb.height-90;
       if(gl.parentElement!==box){ box.appendChild(gl); if(lb) box.appendChild(lb); root.classList.add('insetOn'); window.__histInsetOn=true; gl.style.visibility=''; } { const mc=box.querySelector('#histMicro'); if(mc) mc.style.opacity='0'; }
-      box.hidden=false; const k=A.dir>0?e:1-e, L=(a,b)=>a+(b-a)*k, sm={l:rb.width-22-320,t:bt-10-200,w:320,h:200};
+      box.hidden=false; const k=A.dir>0?e:1-e, L=(a,b)=>a+(b-a)*k, sm={l:rb.width-22-box.offsetWidth,t:bt-10-box.offsetHeight,w:box.offsetWidth,h:box.offsetHeight};
       Object.assign(box.style,{zIndex:'1',right:'auto',bottom:'auto',left:L(sm.l,0)+'px',top:L(sm.t,0)+'px',width:L(sm.w,rb.width)+'px',height:L(sm.h,rb.height)+'px',borderRadius:L(12,0)+'px'});
       const k2=box.querySelector('.k'), ex=box.querySelector('.ex'); if(k2) k2.style.opacity=String(1-k); if(ex) ex.style.opacity=String(1-k);
       HF.cv.hidden=false; HF.cv.style.opacity=String(1-k); HF.lab.hidden=k>0.4; dispatchEvent(new Event('resize'));
       if(x<1) return; HF.ia=null; ['left','top','width','height','right','bottom','borderRadius','zIndex'].forEach(q=>box.style[q]=''); HF.cv.style.opacity=''; if(k2) k2.style.opacity=''; if(ex) ex.style.opacity=''; HF.cv.hidden=!on; HF.lab.hidden=!on; } }
   if(want){ if(gl&&gl.parentElement===box){ root.insertBefore(gl,root.firstChild); if(lb) root.appendChild(lb); gl.style.visibility='hidden'; window.__histInsetOn=false; dispatchEvent(new Event('resize')); } root.classList.add('insetOn'); chxInset(box); const mc=box.querySelector('#histMicro'); if(mc) mc.style.opacity='1';
-    const bar=document.getElementById('histBar'), rb=root.getBoundingClientRect(), bt=bar?bar.getBoundingClientRect().top-rb.top:rb.height-90, b=Math.round(rb.height-bt+10)+'px'; if(box.style.bottom!==b) box.style.bottom=b; box.hidden=false; }
+    const bar=document.getElementById('histBar'), rb=root.getBoundingClientRect(), bt=bar?bar.getBoundingClientRect().top-rb.top:rb.height-90, b0=Math.round(rb.height-bt+10), ph=document.getElementById('histPh'), col=innerWidth>=900, b=(col&&ph&&!ph.hidden?b0+ph.offsetHeight+10:b0)+'px'; if(box.style.bottom!==b) box.style.bottom=b; box.hidden=false;
+    /* one right-hand column: the stage card on top, then the close-up, then the light path; the film gets the rest */
+    const cd=document.getElementById('histCard'); if(cd&&col){ const mh=Math.max(140,Math.round(rb.height-parseInt(b)-box.offsetHeight-10-cd.offsetTop-10))+'px'; if(cd.style.maxHeight!==mh) cd.style.setProperty('max-height',mh,'important'); } }
   else { if(gl&&box&&gl.parentElement===box){ root.insertBefore(gl,root.firstChild); if(lb) root.appendChild(lb); root.classList.remove('insetOn'); window.__histInsetOn=false; dispatchEvent(new Event('resize')); }
     if(box) box.hidden=true; if(gl) gl.style.visibility=on?'hidden':''; } }
 
@@ -14105,11 +14129,17 @@ function mgUpd(tG,X,dt,want,dW){ if(!MG.built) mgBuild();
   const Ac=new THREE.Vector3(LX-RS*0.5,0,0), As=new THREE.Vector3(LX,0,0);
   want.multiplyScalar(w.F).addScaledVector(Ac,w.C).addScaledVector(As,w.S);
   return Math.exp(w.F*Math.log(dW)+w.C*Math.log(HF.zoom*RS*3.6)+w.S*Math.log(HF.zoom*RS*3.5)); }
+/* the best-known objects, by comoving distance (Mpc) and galactic (l, b); on the funnel's 2D slice each sits at its true
+   comoving radius, at the angle of its direction projected onto the slice (so directions are only indicative) */
+const KNOWN=[['Andromeda (M31)',121.17,-21.57,0.765,3],['Virgo cluster',283.8,74.5,16.5,2],['Great Attractor (Norma cluster)',325.3,-7.3,68,2],['Perseus cluster',150.6,-13.3,73,3],['Coma cluster',58.1,88,99,2],['Shapley supercluster',312,31,200,2],['Sloan Great Wall',308,64.8,310,1],['3C 273, first quasar found',289.95,64.36,650,2],['ULAS J1342+0928, quasar z = 7.54 · 29.4 billion light-years',339.4,68.7,9020,1],['GN-z11, z = 10.6 · 31.9 billion light-years',126,54.8,9780,1],['JADES-GS-z14-0, z = 14.3 · 33.9 billion light-years',223.6,-54.5,10390,1],['MoM-z14, z = 14.4 · 33.9 billion light-years',236.7,42.1,10400,1]];   /* the same objects, names and distances (comoving, Mpc) as the observable-universe view */
+function knownLabels(put,pj,X,tG){ if(ALT||MG.w.F<0.5||tG<12.5) return; const v=new THREE.Vector3(), seen=[];
+  KNOWN.slice().sort((a,b)=>a[4]-b[4]||b[3]-a[3]).forEach(([n,l,b,d])=>{ const L=l*Math.PI/180, B=b*Math.PI/180, D=[Math.cos(B)*Math.cos(L),Math.sin(B),-Math.cos(B)*Math.sin(L)], ph=Math.atan2(D[2],D[1]), r=Rof(d,1);
+   v.set(X,r*Math.cos(ph),r*Math.sin(ph)); const q=pj(v); if(!q) return; if(seen.some(o=>Math.abs(o[0]-q[0])<150&&Math.abs(o[1]-q[1])<16)) return; seen.push(q); put(n,'obj',q[0],q[1]); }); }
 const MGN=[['Virgo cluster',283.8,74.5,16.5],['Coma cluster',58.1,88.0,99],['Great Attractor',325.3,-7.3,68],['Shapley supercluster',312,31,200],['Sloan Great Wall',null,null,null],['Perseus cluster',150.6,-13.3,73]];
 function mgLabels(put,pj,tG){ const w=MG.w, v=new THREE.Vector3();
   if(w.S>0.04&&w.S<0.9){ const aR=1/1091, Xc=Xof(tOf(aR)), Rs=MG.cmbS.geometry.parameters.radius, Rr=Rof(aR*(ETA0-eta(aR)),aR), e=w.S; v.set(Xc+(LX-Xc)*e,Rr+(Rs-Rr)*e+0.3,0); const q=pj(v); if(q) put(e<0.5?'the CMB we see: the ring on the slice where its light left, carried forward to today':'… where that plasma is now: 45 billion light-years away, all round us','bg',q[0],q[1]); }
   if(w.S>0.5){ v.set(LX,0,0); let q=pj(v); if(q) put('you, now','now',q[0]+6,q[1]);
-    MGN.forEach(([n,l,b,d])=>{ if(l==null) return; const D=[Math.cos(b*Math.PI/180)*Math.cos(l*Math.PI/180),Math.sin(b*Math.PI/180),-Math.cos(b*Math.PI/180)*Math.sin(l*Math.PI/180)], kS=RS*mgFr(d); v.set(LX+kS*D[0],kS*D[1],kS*D[2]); const q=pj(v); if(q) put(n,'',q[0],q[1]); });
+    /* named objects here come from the embedded observable-universe view itself: no second set */
     v.set(LX,RS*0.72,RS*0.72); q=pj(v); if(q) put('CMB (WMAP) · 45 billion light-years · light from 380 000 years after the Big Bang','bg',q[0],q[1]); } }
 
 /* ---- light from a chosen source, inside the growing history: its ray is drawn up to the moment on the timeline */
@@ -14158,12 +14188,16 @@ window.__histFunnel=function(Ud,s,dt,W,Hh){ const root=document.getElementById('
   const tG=Math.max(s.t,0)/3.15576e16, a=aOf(tG), X=Math.min(LX,Xof(tG)), Rn=Rof(a*CHIC,a);
   /* size and camera */
   const w=HF.cv.clientWidth, h=HF.cv.clientHeight; if(HF.cv.width!==Math.round(w*HF.R3.getPixelRatio())) HF.R3.setSize(w,h,false);
-  HF.cam.aspect=w/h; if(w>=720){ const sh=Math.round(Math.min(200,w*0.15)); HF.cam.setViewOffset(w,h,sh,0,w,h); } else HF.cam.clearViewOffset(); HF.cam.updateProjectionMatrix();
+  HF.cam.aspect=w/h; if(w>=720){ const sh=Math.round(w>=900?Math.min(260,w*0.17):Math.min(200,w*0.15)); HF.cam.setViewOffset(w,h,sh,0,w,h); } else HF.cam.clearViewOffset(); HF.cam.updateProjectionMatrix();
   const span=Math.max(X,0.4), want=new THREE.Vector3(Math.max(0.15,X-Math.min(span*0.35,6+1.2*Rn)),0,0), dWant=HF.zoom*Math.max(2.2,2.3*Rn+0.55*Math.min(span,18)+1.5), k=1-Math.exp(-(dt||0.016)*2.5);
   const dW2=mgUpd(tG,X,dt,want,dWant); HF.tg.lerp(want,k); HF.dist=Math.exp(Math.log(HF.dist)+(Math.log(dW2)-Math.log(HF.dist))*k);
-  const cp=Math.cos(HF.pitch); HF.cam.position.set(HF.tg.x+HF.dist*cp*Math.sin(HF.yaw),HF.tg.y+HF.dist*Math.sin(HF.pitch),HF.tg.z+HF.dist*cp*Math.cos(HF.yaw)); HF.cam.lookAt(HF.tg); HF.cam.updateMatrixWorld();
+  if(HF.ride){ /* inside: we ride the present along our own world line; behind us is the past, which is what light shows us */
+   const back=Math.max(0.03,0.04*Rn); HF.cam.clearViewOffset(); HF.cam.fov=72; HF.cam.updateProjectionMatrix(); HF.cam.position.set(Math.max(0.02,X-back),Rn*0.08,0);
+   const cy=Math.cos(HF.rp); HF.cam.lookAt(HF.cam.position.x-cy*Math.cos(HF.ry),HF.cam.position.y+Math.sin(HF.rp),cy*Math.sin(HF.ry)); HF.cam.updateMatrixWorld(); HF.bb.scale.setScalar(Math.min(0.5,0.3*HF.cam.position.x)); }
+  else { HF.bb.scale.setScalar(0.5); if(HF.cam.fov!==48){ HF.cam.fov=48; HF.cam.updateProjectionMatrix(); }
+  const cp=Math.cos(HF.pitch); HF.cam.position.set(HF.tg.x+HF.dist*cp*Math.sin(HF.yaw),HF.tg.y+HF.dist*Math.sin(HF.pitch),HF.tg.z+HF.dist*cp*Math.cos(HF.yaw)); HF.cam.lookAt(HF.tg); HF.cam.updateMatrixWorld(); }
   /* the present */
-  HF.pts.material.uniforms.uX.value=X; HF.pts.material.uniforms.uPx.value=HF.R3.getPixelRatio()*h/900; HF.gals.material.uniforms.uX.value=X; HF.gals.material.uniforms.uPx.value=HF.R3.getPixelRatio()*h/900; HF.clip.constant=X;
+  HF.pts.material.uniforms.uX.value=X; HF.pts.material.uniforms.uPx.value=HF.R3.getPixelRatio()*h/900*(HF.ride?0.22:1); HF.gals.material.uniforms.uX.value=X; HF.gals.material.uniforms.uPx.value=HF.R3.getPixelRatio()*h/900*(HF.ride?0.5:1); HF.clip.constant=X;
   const T=T0/a, c=bbRGB(T), glow=T>1500?1:T>600?0.35:0.12;
   mgMorph(MG.rdt||0.016); const Rm=HF.morph?HF.morph.Rn0+(Math.max(Rn,0.004)-HF.morph.Rn0)*HF.morph.e:Math.max(Rn,0.004);
   HF.slice.position.set(X,0,0); HF.slice.scale.set(Rm,Rm,1); HF.ring.position.copy(HF.slice.position); HF.ring.scale.copy(HF.slice.scale);
@@ -14185,7 +14219,9 @@ window.__histFunnel=function(Ud,s,dt,W,Hh){ const root=document.getElementById('
   if(MG.w.F>0.5) for(const it of HF.bg.userData.items){ if(tG<it.B.t) continue; v.set(it.X,-(it.Rs+0.06+0.03*HF.dist),0); const q1=pj(v); if(q1) put(it.B.k==='cmb'?'CMB released here · the ring is the last-scattering surface we see today':'Neutrinos decouple here (~1 s) · the cosmic neutrino background','bg',q1[0],q1[1]); }
   if(ALT||MG.w.F<0.5){ if(HF.pl){ HF.pl.visible=false; HF.sm.visible=false; HF.hd.visible=false; HF.wl.visible=false; } } else hfPathUpd(tG,put,pj);
   if(!MG.emb) mgLabels(put,pj,tG);
-  v.set(X,Rn+0.05+0.03*HF.dist,0); const q=MG.w.F>0.5?pj(v):null; if(q) put('Now · '+(document.getElementById('histT')?.textContent||'')+(s.e&&s.e.id==='inf'?' · inflation: no particles yet':T>1?' · '+(T>1e4?sig(T,2):Math.round(T))+' K':''),'now',q[0],q[1]);
+  knownLabels(put,pj,X,tG);
+  if(HF.ride) put('You ride the present, on our own world line. Ahead of you is the past, narrowing to the Big Bang: looking out is looking back. Drag to look around.','now',22,196);
+  v.set(X,Rn+0.05+0.03*HF.dist,0); const q=HF.ride?null:MG.w.F>0.5?pj(v):null; if(q) put('Now · '+(document.getElementById('histT')?.textContent||'')+(s.e&&s.e.id==='inf'?' · inflation: no particles yet':T>1?' · '+(T>1e4?sig(T,2):Math.round(T))+' K':''),'now',q[0],q[1]);
   while(HF.lab.children.length<out.length) HF.lab.appendChild(document.createElement('span'));
   [...HF.lab.children].forEach((e,i)=>{ const o=out[i]; if(!o){ e.style.display='none'; return; } e.style.display=''; if(e.textContent!==o[0]) e.textContent=o[0]; e.className=o[1]; e.style.transform=`translate(${o[2].toFixed(0)}px,${(o[3]-6).toFixed(0)}px)`; });
   MODE=save; return true; };
@@ -14473,7 +14509,11 @@ const nS={
   P.dist=Math.exp(Math.log(P.dist)+(Math.log(view)-Math.log(P.dist))*(1-Math.exp(-raw*2.2)));
   orbit.dist=P.dist*P.uz; P.last=orbit.dist; orbit.apply(raw); cam.near=orbit.dist*1e-3; cam.far=orbit.dist*1e7; cam.updateProjectionMatrix(); stars.scale.setScalar(orbit.dist*50);
   /* the two panels stack in a narrow column on the left (HR diagram above, the cut-open star below); the star gets the rest */
-  const B=K.box(), W=K.W, H=K.H, two=B.w>=640&&B.h>=380, hw=two?Math.min(330,Math.max(240,B.w*0.28)):Math.min(300,B.w*0.5), hh=two?Math.min(270,(B.h-12)/2):Math.min(220,B.h*0.4), cxs=(B.x+hw+Math.min(K.viewW,W))/2;
+  let B=K.box(), W=K.W, H=K.H, two=B.w>=640&&B.h>=380, hw=two?Math.min(330,Math.max(240,B.w*0.28)):Math.min(300,B.w*0.5), hh=two?Math.min(270,(B.h-12)/2):Math.min(220,B.h*0.4), X0=two?Math.min(K.viewW,W,B.x+B.w)-hw-8:B.x, cxs=two?(B.x+X0)/2:(B.x+hw+Math.min(K.viewW,W))/2, yHR=two?B.y+B.h-2*hh-12:B.y+B.h-hh, yIn=B.y+B.h-hh;
+  /* wide screens: the HR diagram and the cutaway stack under the info card, one right-hand column; the card gives up height to make room */
+  const cdE=document.getElementById('sbkCard'), cr=cdE?cdE.getBoundingClientRect():null;
+  if(two&&cr&&cr.width>200&&innerWidth>=721){ const fold=cdE.classList.contains('fold'), top=cr.top, avail=H-top-14; hh=Math.max(150,Math.min(235,avail*0.27)); if(!fold) cdE.style.maxHeight=Math.max(150,avail-2*hh-16)+'px';
+    hw=cr.width; X0=cr.left; yHR=top+cdE.offsetHeight+8; yIn=yHR+hh+8; cxs=(B.x+cr.left)/2; }
   cam.aspect=W/H; cam.setViewOffset(W,H,W/2-cxs,0,W,H); cam.updateProjectionMatrix(); K.gl.render(scene,cam);
   /* overlay: size references, the HR diagram, the flash */
   const g=K.clear();
@@ -14481,8 +14521,8 @@ const nS={
   if(P.refs){ const q=proj2(new THREE.Vector3(0,0,0),cam); if(q){ const ppu=K.H/(2*orbit.dist*Math.tan(cam.fov*D2R/2)); g.save(); g.setLineDash([4,5]); g.lineWidth=1; g.font='11px Inter,sans-serif'; g.textAlign='left';
     REFS.forEach(([r,l])=>{ const pr=r*ppu; if(pr<10||pr>Math.min(W,H)*0.9) return; g.strokeStyle='rgba(169,200,255,0.55)'; g.beginPath(); g.arc(q[0],q[1],pr,0,TAU); g.stroke(); g.fillStyle='rgba(169,200,255,0.9)'; g.fillText(l,q[0]+pr*0.71+6,q[1]-pr*0.71-4-(l.length%3)*4); }); g.restore(); } }
   if(fx==='flash'){ g.fillStyle='rgba(255,230,180,0.9)'; g.font='600 13px Inter,sans-serif'; g.textAlign='center'; const q=proj2(new THREE.Vector3(0,0,0),cam); if(q) g.fillText('helium flash in the core: 10¹¹ L☉ for seconds, absorbed by the envelope',q[0],q[1]+Math.min(H*0.4,200)); }
-  hr(g,{x:B.x,y:two?B.y+B.h-2*hh-12:B.y+B.h-hh,w:hw,h:hh});
-  try{ if(two) inside(g,{x:B.x,y:B.y+B.h-hh,w:hw,h:hh},s.ph[0],s.ph[5],tr.m[0]); K.mark(2); }catch(e){ if(!window.__ie){ window.__ie=1; console.error(e); } }
+  hr(g,{x:X0,y:yHR,w:hw,h:hh});
+  try{ if(two) inside(g,{x:X0,y:yIn,w:hw,h:hh},s.ph[0],s.ph[5],tr.m[0]); K.mark(2); }catch(e){ if(!window.__ie){ window.__ie=1; console.error(e); } }
   /* readouts and head */
   K.head('The life of a star · '+tr.n,s.ph[0],fmtA(s.age)+' · '+(fx==='ns'||fx==='bh'||fx==='snr'?fmtR(Rv):fmtR(s.R)));
   R.set('ph',s.ph[0]); R.set('age',fmtA(s.age)); R.set('L',fx==='snr'?'none: no remnant':fx==='bh'?'none':fx==='ns'?'~10⁻³ L☉ (X-rays)':sig(Math.pow(10,s.L),3)+' L☉');
@@ -14522,11 +14562,11 @@ const TR=[
      g.fillStyle='#000'; g.strokeStyle=c; g.lineWidth=2; g.beginPath(); g.arc(x,y,live?r:18,0,TAU); g.fill(); g.stroke(); if(!live) break; }
    /* ripples */ g.strokeStyle='rgba(232,232,232,0.18)'; g.lineWidth=1; for(let k=1;k<7;k++){ const rr=((k*40+performance.now()/1000*60*(live?Math.min(4,f/40):0.5))%280); g.beginPath(); g.ellipse(cx,cy,rr,rr*0.35,0,0,TAU); g.stroke(); }
    /* frequency track, log 15–400 Hz */
-   const px=B.x+20, pw=B.w-40, py=B.y+B.h*0.62, ph=B.h*0.2, fy=v=>py+ph-ph*Math.log(v/15)/Math.log(400/15), fx=v=>px+pw*v/T;
+   const Sl=B.slot, px=Sl?Sl.x+14:B.x+20, pw=Sl?Sl.w-28:B.w-40, py=Sl?Sl.y+26:B.y+B.h*0.62, ph=Sl?Sl.h-40:B.h*0.2, fy=v=>py+ph-ph*Math.log(v/15)/Math.log(400/15), fx=v=>px+pw*v/T;
    g.strokeStyle='rgba(236,230,218,0.25)'; g.strokeRect(px,py,pw,ph); g.font='500 10.5px Figtree,system-ui,sans-serif'; g.fillStyle='#8f8a80'; g.textAlign='left';
    [20,50,100,250].forEach(v=>{ g.fillText(v+' Hz',px+4,fy(v)+3); g.strokeStyle='rgba(236,230,218,0.07)'; g.beginPath(); g.moveTo(px+40,fy(v)); g.lineTo(px+pw,fy(v)); g.stroke(); });
    g.strokeStyle='#ffc58a'; g.lineWidth=2; g.beginPath(); m.F.forEach(([a,b],i)=>i?g.lineTo(fx(a),fy(b)):g.moveTo(fx(a),fy(b))); g.stroke();
-   g.strokeStyle='#fff'; g.beginPath(); g.moveTo(fx(t),py); g.lineTo(fx(t),py+ph); g.stroke(); g.fillStyle='#ece6da'; g.fillText('gravitational-wave frequency',px+pw-170,py-6); },
+   g.strokeStyle='#fff'; g.beginPath(); g.moveTo(fx(t),py); g.lineTo(fx(t),py+ph); g.stroke(); g.fillStyle='#ece6da'; g.fillText('gravitational-wave frequency',px+pw-170,py-8); },
   now:(tt,m)=>{ const t=tt%m.dur; return t<m.Ti?'inspiral':t<m.Ti+0.03?'merger and ringdown':'(silence, then again)'; }},
  {k:'psr',n:'Pulsars ticking',ic:'✦',
   h:'A pulsar is a neutron star, 20 km across and heavier than the Sun, whose radio beams sweep past the Earth once per turn. Played here as the radio telescope hears it: one click per rotation at the true period. Slow pulsars tick; the fastest turn so quickly that the clicks fuse into a musical note.',
@@ -14547,7 +14587,7 @@ const TR=[
    g.fillStyle='#dfe8ff'; g.beginPath(); g.arc(cx,cy,9,0,TAU); g.fill();
    g.font='500 11.5px Figtree,system-ui,sans-serif'; g.fillStyle='#8f8a80'; g.textAlign='center'; if(slow>1) g.fillText('drawn '+slow+'× slower than it turns; the sound is at the true rate',cx,cy+B.h*0.4);
    /* pulse train: the last 12 periods */
-   const px=B.x+20, pw=B.w-40, py=B.y+B.h*0.78, win=12*P; g.strokeStyle='#a9c8ff'; g.lineWidth=1.5; g.beginPath();
+   const Sl=B.slot, px=Sl?Sl.x+14:B.x+20, pw=Sl?Sl.w-28:B.w-40, py=Sl?Sl.y+Sl.h-22:B.y+B.h*0.78, win=12*P; g.strokeStyle='#a9c8ff'; g.lineWidth=1.5; g.beginPath();
    for(let i=0;i<=pw;i++){ const t=tt-win+win*i/pw, x=((t%P)+P)%P/P-0.5, y=Math.exp(-x*x/(2*0.012*0.012*(P<0.03?9:1))); i?g.lineTo(px+i,py-y*30):g.moveTo(px+i,py-y*30); } g.stroke(); },
   now:()=>''},
  {k:'sun',n:'The Sun ringing',ic:'☉',
@@ -14566,7 +14606,7 @@ const TR=[
    const ld=g.createRadialGradient(cx,cy,r*0.2,cx,cy,r); ld.addColorStop(0,'rgba(0,0,0,0)'); ld.addColorStop(1,'rgba(0,0,0,0.55)'); g.fillStyle=ld; g.fillRect(cx-r,cy-r,2*r,2*r); g.restore();
    g.font='500 10.5px Figtree,system-ui,sans-serif'; g.fillStyle='#8f8a80'; g.textAlign='center'; g.fillText('blue: surface rising · red: falling (illustrative pattern, slowed)',cx,cy+r+16);
    /* the mode comb */
-   const px=B.x+20, pw=B.w-40, py=B.y+B.h*0.72, ph=B.h*0.16, fx=nu=>px+pw*(nu-1800)/2700; g.strokeStyle='rgba(236,230,218,0.25)'; g.beginPath(); g.moveTo(px,py+ph); g.lineTo(px+pw,py+ph); g.stroke();
+   const Sl=B.slot, px=Sl?Sl.x+14:B.x+20, pw=Sl?Sl.w-28:B.w-40, py=Sl?Sl.y+26:B.y+B.h*0.72, ph=Sl?Sl.h-52:B.h*0.16, fx=nu=>px+pw*(nu-1800)/2700; g.strokeStyle='rgba(236,230,218,0.25)'; g.beginPath(); g.moveTo(px,py+ph); g.lineTo(px+pw,py+ph); g.stroke();
    m.M.forEach(q=>{ const h=ph*q.A/1.5*(0.6+0.4*Math.sin(tt*3+q.p)**2); g.strokeStyle=['#ffc58a','#a9c8ff','#9fe0b0'][q.l]; g.lineWidth=2; g.beginPath(); g.moveTo(fx(q.nu),py+ph); g.lineTo(fx(q.nu),py+ph-h); g.stroke(); });
    g.fillStyle='#8f8a80'; g.textAlign='center'; [2000,2500,3000,3500,4000,4500].forEach(v=>g.fillText(v+' μHz',fx(v),py+ph+14)); g.textAlign='left'; g.fillText('modes of degree ℓ = 0 (amber), 1 (blue), 2 (green)',px,py-4); },
   now:()=>''},
@@ -14588,7 +14628,7 @@ const TR=[
      for(let i=0;i<=200;i++){ const a=TAU*i/200, rr=ri+(k*5)*Math.cos(k*a)*Math.sin(TAU*tt*0.6*Math.sqrt(k*(k+1))/1.41); const x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a); i?g.lineTo(x,y):g.moveTo(x,y); } g.stroke(); }); g.globalAlpha=1;
    g.strokeStyle='rgba(169,200,255,0.25)'; g.setLineDash([3,4]); g.beginPath(); g.arc(cx,cy,ri+22,0,TAU); g.stroke(); g.setLineDash([]); g.font='500 10.5px Figtree,system-ui,sans-serif'; g.fillStyle='#8f8a80'; g.textAlign='center'; g.fillText('ionosphere (≈ 80 km up, drawn far higher)',cx,cy-ri-28);
    if(r1()<0.06){ const a=TAU*r1(); g.strokeStyle='#fff'; g.lineWidth=1.5; g.beginPath(); g.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)); g.lineTo(cx+ri*Math.cos(a+0.03),cy+ri*Math.sin(a+0.03)); g.stroke(); }
-   const px=B.x+20, pw=B.w-40, py=B.y+B.h*0.72, ph=B.h*0.13, fx=f=>px+pw*f/40; g.strokeStyle='#ffc58a'; g.lineWidth=1.8; g.beginPath();
+   const Sl=B.slot, px=Sl?Sl.x+14:B.x+20, pw=Sl?Sl.w-28:B.w-40, py=Sl?Sl.y+18:B.y+B.h*0.72, ph=Sl?Sl.h-44:B.h*0.13, fx=f=>px+pw*f/40; g.strokeStyle='#ffc58a'; g.lineWidth=1.8; g.beginPath();
    for(let i=0;i<=pw;i++){ const f=40*i/pw; let s=0; m.FR.forEach((F,j)=>{ s+=[1,0.75,0.55,0.4,0.3][j]/(1+Math.pow((f-F)/(F/9),2)); }); const y=py+ph-ph*s; i?g.lineTo(px+i,y):g.moveTo(px+i,y); } g.stroke();
    g.fillStyle='#8f8a80'; g.textAlign='center'; [0,10,20,30,40].forEach(v=>g.fillText(v+' Hz',fx(v),py+ph+14)); },
   now:()=>''},
@@ -14665,9 +14705,13 @@ S.add({key:'hear',name:'Hear the universe',blurb:'Black holes merging, pulsars t
  leave(){ stop(); },
  busy(){ return true; },
  frame(dt,raw,K){ vis+=raw; const g=K.clear(), B=K.box(), T=TR[cur], m=meta(), tt=playing&&AC?(AC.currentTime-t0):vis;
-  g.save(); T.draw.call(T,g,{x:B.x,y:B.y+40,w:B.w,h:B.h-120},tt,m); g.restore();
+  /* the right-hand column under the card: this sound's track (when it has one) and the live waveform */
+  const hasTr=T.__tr!=null?T.__tr:(T.__tr=/B\.slot/.test(T.draw.toString())), SL=K.under(hasTr?236:84);
+  if(SL){ g.save(); g.fillStyle='rgba(8,8,10,0.84)'; g.strokeStyle='rgba(236,230,218,0.16)'; g.beginPath(); g.roundRect?g.roundRect(SL.x,SL.y,SL.w,SL.h,12):g.rect(SL.x,SL.y,SL.w,SL.h); g.fill(); g.stroke(); g.restore(); }
+  const mb=SL&&hasTr?{x:B.x,y:B.y+40,w:B.w,h:(B.h-120)*1.35,slot:{x:SL.x,y:SL.y,w:SL.w,h:150}}:{x:B.x,y:B.y+40,w:B.w,h:B.h-120};
+  g.save(); T.draw.call(T,g,mb,tt,m); g.restore();
   /* the live waveform, whatever is playing */
-  const wy=B.y+B.h-46, wx=B.x+20, ww=Math.min(B.w-40,700); g.strokeStyle='rgba(236,230,218,0.12)'; g.beginPath(); g.moveTo(wx,wy); g.lineTo(wx+ww,wy); g.stroke();
+  const wy=SL?SL.y+SL.h-30:B.y+B.h-46, wx=SL?SL.x+14:B.x+20, ww=SL?SL.w-28:Math.min(B.w-40,700); g.strokeStyle='rgba(236,230,218,0.12)'; g.beginPath(); g.moveTo(wx,wy); g.lineTo(wx+ww,wy); g.stroke();
   if(playing&&AN){ AN.getFloatTimeDomainData(WF); g.strokeStyle='#ffd9b0'; g.lineWidth=1.4; g.beginPath(); for(let i=0;i<WF.length;i+=2){ const X=wx+ww*i/WF.length, Y=wy-WF[i]*30; i?g.lineTo(X,Y):g.moveTo(X,Y); } g.stroke(); }
   else { g.fillStyle='#8f8a80'; g.font='500 11.5px Figtree,system-ui,sans-serif'; g.textAlign='left'; g.fillText('press ▶ Play on the card to hear it',wx,wy-8); }
   K.ep(T.n+(playing?' · playing':'')); }});
@@ -15639,7 +15683,7 @@ function obsDraw(raw,g0,W0,H0,LBL){
 window.__obsuEmbed={
  draw(R3,camH,c,W,H,put){ if(!scU) build(); cam.fov=camH.fov; cam.aspect=camH.aspect; const vw=camH.view; if(vw&&vw.enabled) cam.setViewOffset(vw.fullWidth,vw.fullHeight,vw.offsetX,vw.offsetY,vw.width,vw.height); else cam.clearViewOffset();
   orbit.tgt.fromArray(c.tgt); orbit.yaw=c.yaw; orbit.pitch=c.pitch; orbit.dist=c.dist; orbit.distT=null; orbit.apply(0); cam.updateMatrixWorld();
-   obsDraw(c.raw||0.016,R3,W,H,(t,x,y,k)=>put(t,k==='dim'?'dim':'bg',x,y)); },
+   const pl=[]; obsDraw(c.raw||0.016,R3,W,H,(t,x,y,k)=>{ const w=String(t).length*6.2+10, b=[x,y-8,x+w,y+8]; if(pl.some(o=>b[0]<o[2]&&b[2]>o[0]&&b[1]<o[3]&&b[3]>o[1])) return; pl.push(b); put(t,k==='dim'?'dim':'bg',x,y); }); },   /* labels that would overlap are dropped */
  set(o){ if('cone' in o){ P.cone=!!o.cone; if(CHK) CHK.checked=P.cone; } if('lab' in o) P.lab=!!o.lab; if('rings' in o) P.rings=!!o.rings; },
  get cone(){ return P.cone; }, get u(){ return u; },
  views(){ return VIEWS.map(v=>{ let t=v.t; if(t==='edge'){ const d=dirLB(90,60), rr=fr(CHIS); t=[d[0]*rr*0.97,d[1]*rr*0.97,d[2]*rr*0.97]; } return {name:v.name,d:v.d,p:v.p,y:v.y,t}; }); },
@@ -15969,6 +16013,69 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
 #plan.sem #plSEM{top:auto!important;bottom:calc(var(--plBarH,140px) + 8px)!important;max-height:34vh!important}
 #sbk .hrow,#sbkBar .arow{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start!important;scrollbar-width:none}#sbk .hrow::-webkit-scrollbar,#sbkBar .arow::-webkit-scrollbar{display:none}#sbk .hb,#sbkTog .tgs{flex:none}}
 </style>
+<style>
+/* ---- one rule for every sandbox and every planetarium panel: the scene gets the screen.
+   Narrow cards, compact type, and long prose folded to two lines (click a paragraph to read it all) ---- */
+@media (min-width:721px){
+ #sbkCard{right:14px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(330px,calc(100vw - 28px));padding:9px 12px 9px;max-height:calc(100% - 132px)}
+ #sbkCard h2{font-size:18px;margin:0 0 4px}
+ #sbkCard h3{margin:10px 0 5px;font-size:10.5px}
+ #sbkCard p{font-size:12.3px;line-height:1.42;margin:0 0 6px}
+ #sbkCard .lede{font-size:13px;line-height:1.38}
+ #sbkCard p.src{font-size:11px;margin-top:6px}
+ #sbkHead{left:16px;top:calc(env(safe-area-inset-top,0px) + 12px)}
+ #sbkBar{left:16px;right:356px}
+ #sbkCard .sk-ro{gap:3px 10px;margin:2px 0 6px}
+ #sbkCard .sk-ro .k{font-size:10.5px}
+ #sbkCard .sk-ro .v{font-size:13px;line-height:1.22}
+ #sbkCard .sk-cv{height:150px}
+ #sbkCard .sk-seg,#sbkCard .sk-row{gap:4px;margin-bottom:7px}
+ #sbkCard .sk-seg button,#sbkCard #sbkPre button{padding:4px 9px;font-size:11.5px}
+ #sbkCard .sk-sl{margin-bottom:6px}
+ #sbkCard .sk-sl .top{font-size:12px}
+ #sbkCard .sk-tbl{font-size:11.5px}
+ #sbkCard .st2-list{gap:2px}
+ #sbkCard .st2-list button{padding:4px 9px!important;font-size:12px}
+ #sbkCard .st2-list button small{font-size:10.5px}
+ #plan section{padding:9px 12px;border-radius:12px}
+ #plSide{left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:230px}
+ #plSide,#plUp,#plLay,#plCyc,#plWh,#plGM,#plPol,#plSEM{left:auto!important;right:12px!important;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))!important;max-height:calc(100% - 132px)}
+ #plSel{right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))}
+ #plSel h2{font-size:17px}
+ #plSel dt,#plSel dd,.plDl dt,.plDl dd{padding:3px 0}
+ #plSel dt,.plDl dt{font-size:11.5px}
+ #plSel dd,.plDl dd{font-size:12.5px}
+ #plan .plNote,#plan section p{font-size:11.8px;line-height:1.42}
+ #plan .plChk{padding-top:3px;padding-bottom:3px}
+ #plan .plChk small{display:none}
+ #plan select,#plan input[type=search]{padding:5px 8px;font-size:12.5px!important}
+ #plHead{padding:5px 12px}
+ #plan button{padding:6px 9px;font-size:12px}
+}
+.clp{display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.clp:hover{color:#f1e9da!important}
+#sbkCard .lede.clp{-webkit-line-clamp:3}
+</style>
+<script>
+/* fold long paragraphs to two lines in sandbox cards and planetarium panels; a click opens or folds one; checkbox notes move into tooltips */
+(function(){ const sel='#sbkCardIn p:not(.clpN), #sbkCardIn div:not(.clpN), #plan section p:not(.clpN), #plan section div:not(.clpN)', INL=/^(B|I|EM|STRONG|SUB|SUP|SPAN|A|SMALL|BR|CODE|VAR)$/;
+ function scan(){ if(innerWidth<721) return; document.querySelectorAll(sel).forEach(p=>{ if(p.closest('dl,label,button,.sk-ro,.sk-tbl')||p.querySelector('input,select,button,canvas,svg')||[...p.children].some(c=>!INL.test(c.tagName))) { if(p.tagName==='P') p.classList.add('clpN'); return; } const n=(p.textContent||'').length; if(n<150) return; p.classList.add('clpN','clp'); p.title='Click to read all'; });
+  document.querySelectorAll('#plan .plChk small:not([data-t])').forEach(sm=>{ sm.dataset.t=1; const l=sm.closest('label'); if(l&&!l.title) l.title=sm.textContent; }); }
+ document.addEventListener('click',e=>{ const p=e.target.closest&&e.target.closest('.clpN'); if(!p||e.target.closest('a,button,input')) return; if(p.classList.contains('clp')){ p.classList.remove('clp'); p.title='Click to fold'; } else if((p.textContent||'').length>=150){ p.classList.add('clp'); p.title='Click to read all'; } },true);
+ setInterval(scan,600); })();
+/* planetarium, wide screens: one right-hand column; the object card on top, the open tool panel under it, sharing the height */
+(function(){ const IDS=['plSide','plUp','plLay','plCyc','plWh','plGM','plPol','plSEM'];
+ function lay(){ requestAnimationFrame(lay); const pl=document.getElementById('plan'); if(!pl||pl.hidden) return; const wide=innerWidth>=721, sel=document.getElementById('plSel');
+  const H=pl.clientHeight, top0=12, selOn=sel&&!sel.hidden&&sel.offsetParent!==null;
+  const open=IDS.map(i=>document.getElementById(i)).filter(e=>e&&!e.hidden&&e.offsetParent!==null&&getComputedStyle(e).display!=='none');
+  if(!wide){ open.forEach(e=>{ e.style.top=''; e.style.maxHeight=''; }); if(sel) sel.style.maxHeight=''; return; }
+  let y=top0, bottom=H-112;
+  { let r=pl.clientWidth, b=H-96; [sel].concat(open).forEach(e=>{ if(e&&!e.hidden&&e.offsetParent!==null){ const q=e.getBoundingClientRect(); if(q.left>r*0.45) r=Math.min(r,q.left-12); } }); const bar=document.getElementById('plBar'); if(bar){ const q=bar.getBoundingClientRect(); if(q.height) b=Math.min(b,q.top-8); }
+    const f=window.__plFree; if(!f||Math.abs(f.r-r)>1||Math.abs(f.b-b)>1){ window.__plFree={r,b}; try{ window.dispatchEvent(new Event('resize')); }catch(e){} } const hd=document.getElementById('plHead'); if(hd) hd.style.left=(r/2)+'px'; }
+  if(selOn){ const share=open.length?Math.max(170,(bottom-top0)*0.42):bottom-top0; sel.style.maxHeight=share+'px'; y=top0+sel.offsetHeight+8; }
+  open.forEach((e,k)=>{ const room=Math.max(140,(bottom-y)/(open.length-k)-(k<open.length-1?8:0)); e.style.top=y+'px'; e.style.maxHeight=room+'px'; y+=Math.min(e.offsetHeight,room)+8; }); }
+ requestAnimationFrame(lay); })();
+</script>
 <script>
 (function(){ const S=window.__SBK; if(!S) return; const $=id=>document.getElementById(id);
 
