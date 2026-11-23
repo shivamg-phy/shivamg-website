@@ -6867,9 +6867,9 @@ root.innerHTML=`<canvas id="plCv" aria-label="Planetarium. Drag to look around, 
  <div id="plWhLB" hidden><label class="plRow"><span>Galactic longitude l</span><input type="range" id="plWhL" min="0" max="360" step="0.5" value="30"><output id="plWhLV">30°</output></label><label class="plRow"><span>Galactic latitude b</span><input type="range" id="plWhB" min="-90" max="90" step="0.5" value="0"><output id="plWhBV">0°</output></label></div>
  <div class="plBtns"><button type="button" id="plWhPt">Point at it</button><button type="button" id="plWhTr">Go to its transit</button></div>
  <label class="plChk"><input type="checkbox" id="plWhPath" checked> <span>Its path across the sky today<small>solid above the horizon, dashed below</small></span></label>
- <label class="plChk"><input type="checkbox" id="plWhGal"> <span>Galactic coordinates<small>the plane b = 0, b = ±30°, ±60°, l every 30°, the bulge</small></span></label>
+ <label class="plChk" hidden style="display:none!important"><input type="checkbox" id="plWhGal"> <span>Galactic coordinates<small>the plane b = 0, b = ±30°, ±60°, l every 30°, the bulge</small></span></label>
  <label class="plChk"><input type="checkbox" id="plWhCap" checked> <span>Never-sets and never-rises circles<small>green: δ = ±(90° − φ) on your pole’s side; red: the cap that never rises</small></span></label>
- <label class="plChk"><input type="checkbox" id="plWhCone"> <span>The observing cone<small>altitude above 30° (airmass below 2), π sr round the zenith</small></span></label>
+ <label class="plChk" hidden style="display:none!important"><input type="checkbox" id="plWhCone"> <span>The observing cone<small>altitude above 30° (airmass below 2), π sr round the zenith</small></span></label>
  <div id="plWhInfo"></div></section>
 <section id="plCyc" hidden aria-label="Full cycle"><button class="plX" data-x="plCyc" aria-label="Close">×</button><h2>Full cycle from the ground</h2>
  <p class="plNote">The Sun photographed at this moment of the day, every day for a year: its analemma. Dashed where it is below the horizon.</p>
@@ -6899,7 +6899,7 @@ root.innerHTML=`<canvas id="plCv" aria-label="Planetarium. Drag to look around, 
 <div id="plToast" role="status"></div>`;
 document.body.appendChild(root);
 const $=id=>document.getElementById(id);
-const cv=$('plCv'), g=cv.getContext('2d');
+const cv=$('plCv'); let g=cv.getContext('2d');
 let W=1,H=1,DPR=1;
 /* ---------------------------------------------------------------- catalogues */
 let STAR=null;   /* Float32 ra-vector x,y,z ; mag ; colour string ; dist (pc) */
@@ -6985,7 +6985,19 @@ const lerp3=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
 function table(T,x){ if(x<=T[0][0]) return T[0][1]; for(let i=1;i<T.length;i++) if(x<=T[i][0]) return lerp3(T[i-1][1],T[i][1],(x-T[i-1][0])/(T[i][0]-T[i-1][0])); return T[T.length-1][1]; }
 const ZEN=[[-90,[1,2,6]],[-18,[2,4,10]],[-12,[6,10,24]],[-6,[22,36,72]],[-3,[44,68,122]],[0,[72,110,172]],[8,[66,124,206]],[90,[58,118,214]]];
 const HOR=[[-90,[3,4,9]],[-18,[5,7,14]],[-12,[16,20,34]],[-6,[88,70,82]],[-3,[168,112,82]],[0,[214,150,100]],[6,[196,196,204]],[20,[172,198,228]],[90,[168,198,234]]];
-function background(){ if(!MWT&&!mwReq&&S.L.mw) setTimeout(mwLoad,0); const s=Math.max(2,Math.ceil(Math.sqrt(W*H/(MWT&&MWT.R&&S.L.mw?150000:52000)))), w=Math.ceil(W/s), h=Math.ceil(H/s);
+/* the sky background is the costliest thing drawn (a per-pixel atmosphere, ground and Milky Way). It is cached: recomputed only when the
+   view, the place, the layers or the time (to the minute) change; while the view is being dragged it is computed at half resolution,
+   and refined a moment after the view stops. */
+const BGC={key:'',vk:'',t:0,ret:null,s:1,w:0,h:0,coarse:false,tm:0};
+function background(){ const vk=[F[0],F[1],F[2],Rv[0],Rv[1],Rv[2],SC,CX,CY,W,H,DPR].map(x=>typeof x==='number'?x.toFixed(4):x).join(','), key=vk+'|'+[S.lat,S.lon,Math.round(S.jd*1440),S.L.atm,S.L.gnd,S.L.mw,!!MWT,!!(MWT&&MWT.R),S.bortle].join(',');
+  const now=performance.now();
+  if(key===BGC.key&&BGC.ret){ g.imageSmoothingEnabled=true; g.drawImage(BG,0,0,BGC.w*BGC.s,BGC.h*BGC.s); return BGC.ret; }
+  const moving=vk!==BGC.vk&&now-BGC.t<180, coarse=moving&&BGC.ms>6;
+  const t0=performance.now(), r=bgCompute(coarse?2:1); BGC.ms=performance.now()-t0;
+  BGC.key=coarse?'':key; BGC.vk=vk; BGC.t=now; BGC.ret=r;
+  clearTimeout(BGC.tm); if(coarse) BGC.tm=setTimeout(kick,200);
+  return r; }
+function bgCompute(q){ if(!MWT&&!mwReq&&S.L.mw) setTimeout(mwLoad,0); const s=Math.max(2,Math.ceil(q*Math.sqrt(W*H/(MWT&&MWT.R&&S.L.mw?150000:52000)))), w=Math.ceil(W/s), h=Math.ceil(H/s); BGC.s=s; BGC.w=w; BGC.h=h;
   if(BG.width!==w||BG.height!==h){ BG.width=w; BG.height=h; BGI=bg.createImageData(w,h); }
   const d=BGI.data, sun=enu(ST.bodies.Sun.v), hs=Math.asin(sun[2])*R2D, atm=S.L.atm, gnd=S.L.gnd;
   const zen=atm?table(ZEN,hs):[0,0,0], hor=atm?table(HOR,hs):[0,0,0], day=atm?sstep(-10,2,hs):0;
@@ -7325,7 +7337,7 @@ function ppInfo(){ if(!PP.on) return; const south=S.lat<0, Y=ppYear(S.jd), pv=pp
    (po&&!south?`<dt>Polaris</dt><dd>${po.d.toFixed(po.d<1?2:1)}° from the pole${po.d>el?' · from here it rises and sets':' · circles the pole without setting, seen from here'}</dd>`:'')+
    `<dt>Pole (J2000 axes)</dt><dd>RA ${ra.toFixed(2)} h, Dec ${de>=0?'+':'−'}${Math.abs(de).toFixed(2)}°</dd><dt>Height above your horizon</dt><dd>${el.toFixed(1)}° (always your latitude)</dd>`; }
 function ppOn(on){ PP.on=on; $('plPolBtn').setAttribute('aria-pressed',String(on)); $('plPol').hidden=!on;
-  if(on){ if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } ['plUp','plLay','plWh'].forEach(x=>$(x).hidden=true); PP.jd0=S.jd; play(false);
+  if(on){ if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } (window.__plFold&&window.__plFold()); PP.jd0=S.jd; play(false);
     if(S.dome) setDome(false); S.az=S.lat<0?180:0; S.alt=clamp(Math.abs(S.lat),8,80); S.fov=110; S.track=false;
     /* aim at the centre of the precession circle (the ecliptic pole), so the whole 26 000-year circle sits in the free area */
     try{ sky(); const e=enu(PA.vec(S.lat<0?90:270,S.lat<0?-66.5607:66.5607)), al=Math.asin(clamp(e[2],-1,1))*R2D; if(al>-5){ S.az=(Math.atan2(e[0],e[1])*R2D+360)%360; S.alt=clamp(al,12,80); } }catch(err){}
@@ -7620,8 +7632,12 @@ function gmDraw(){ g.setTransform(DPR,0,0,DPR,0,0); g.fillStyle='#04050a'; g.fil
     const ze=e2g(PA.mtv(ST.M,[0,0,1])), zl=Math.atan2(ze[1],ze[0])*R2D, zb=Math.asin(clamp(ze[2],-1,1))*R2D, [ZX,ZY]=gmXY(zl,zb,F); g.strokeStyle='#9fe0b0'; g.beginPath(); g.arc(ZX,ZY,5,0,6.2832); g.moveTo(ZX-9,ZY); g.lineTo(ZX+9,ZY); g.moveTo(ZX,ZY-9); g.lineTo(ZX,ZY+9); g.stroke();
     g.fillStyle='#9fe0b0'; g.font='600 11px Figtree,sans-serif'; g.textAlign='left'; g.fillText('your zenith',ZX+10,ZY-6); }
   /* stars */
-  if(GM.st&&STAR&&STAR.n){ for(let k=0;k<STAR.n;k++){ const m=STAR.MG[k]; if(m>6.5) break; const v=[STAR.V[3*k],STAR.V[3*k+1],STAR.V[3*k+2]], q=e2g(v); const [X,Y]=gmXY(Math.atan2(q[1],q[0])*R2D,Math.asin(clamp(q[2],-1,1))*R2D,F); const r=Math.max(0.5,(6.8-m)*0.42*Math.sqrt(GM.zoom));
-    const dn=GM.hz&&ST&&PA.mv(ST.M,v)[2]<0; g.fillStyle=STAR.CS[k]; g.globalAlpha=Math.min(1,0.35+0.12*(6.5-m))*(dn?0.3:1); g.beginPath(); g.arc(X,Y,r,0,6.2832); g.fill(); } g.globalAlpha=1; }
+  if(GM.st&&STAR&&STAR.n){ /* the star layer is cached on its own canvas: it changes only with the zoom, the pan, the size, or (horizon shading) the minute */
+    const key=[W,H,DPR,F.k,F.ox,F.oy,GM.zoom,!!GM.hz,GM.hz&&ST?Math.round(S.jd*1440):0,S.lat,S.lon,STAR.n].join(','); if(!window.__gmSC) window.__gmSC={c:document.createElement('canvas'),key:''}; const C2=window.__gmSC;
+    if(C2.key!==key){ C2.key=key; C2.c.width=Math.round(W*DPR); C2.c.height=Math.round(H*DPR); const g0=g; g=C2.c.getContext('2d'); g.setTransform(DPR,0,0,DPR,0,0); g.clearRect(0,0,W,H);
+      try{ const byC={}; for(let k=0;k<STAR.n;k++){ const m=STAR.MG[k]; if(m>6.5) break; const v=[STAR.V[3*k],STAR.V[3*k+1],STAR.V[3*k+2]], q=e2g(v); const [X,Y]=gmXY(Math.atan2(q[1],q[0])*R2D,Math.asin(clamp(q[2],-1,1))*R2D,F); const r=Math.max(0.5,(6.8-m)*0.42*Math.sqrt(GM.zoom));
+    const dn=GM.hz&&ST&&PA.mv(ST.M,v)[2]<0; g.fillStyle=STAR.CS[k]; g.globalAlpha=Math.min(1,0.35+0.12*(6.5-m))*(dn?0.3:1); g.beginPath(); g.arc(X,Y,r,0,6.2832); g.fill(); } g.globalAlpha=1; } finally{ g=g0; } }
+    g.save(); g.setTransform(1,0,0,1,0,0); g.drawImage(C2.c,0,0); g.restore(); }
   /* objects */
   const used=[]; GM.pts=[];
   GOBJ.forEach((o,i)=>{ const [X,Y]=gmXY(o.l,o.b,F), col=GKIND[o[3]][0], hv=i===GM.hover||(S.sel&&S.sel.n===o[0]); GM.pts.push([X,Y,i]); g.globalAlpha=GM.hz&&ST&&PA.mv(ST.M,o.v)[2]<0&&!hv?0.55:1;
@@ -7987,7 +8003,8 @@ function semTex(){ if(SEM.tx||SEM.txL) return SEM.tx; SEM.txL=1; const el=docume
   const get=k=>{ const m=new RegExp('"'+k+'":\\s*"(data:image/[^"]+)"').exec(t); return m?m[1]:null; };
   const load=u=>new Promise(res=>{ if(!u) return res(null); const im=new Image(); im.onload=()=>{ const c=document.createElement('canvas'); c.width=1024; c.height=512; const x=c.getContext('2d'); x.drawImage(im,0,0,1024,512); res(x.getImageData(0,0,1024,512).data); }; im.onerror=()=>res(null); im.src=u; });
   Promise.all([load(get('earth_daymap')),load(get('earth_nightmap'))]).then(([d,n])=>{ if(d){ SEM.tx={d,n}; kick(); } }); return null; }
-function semGlobe(g,gx,gy,gr,G){ const TX=semTex(); const N=Math.round(gr*2), img=g.createImageData(N,N), d=img.data, ce=Math.cos(G.eps), se=Math.sin(G.eps);
+const SGC={key:'',c:null};   /* the globe image is cached until the geometry or the minute changes */
+function semGlobe(g,gx,gy,gr,G){ const TX=semTex(); const N=Math.round(gr*2), img=null, d=null, ce=Math.cos(G.eps), se=Math.sin(G.eps);
   const s=[Math.cos(G.lS),Math.sin(G.lS),0], el=15*D2R; let Rv=[-s[0],-s[1],0], V0=[-Math.sin(G.lS),Math.cos(G.lS),0];
   { /* turn the view round if your place is on the far side: the Sun then lights the globe from the right */ const lo0=G.gm+S.lon*D2R, p0=[Math.cos(G.ph)*Math.cos(lo0),Math.cos(G.ph)*Math.sin(lo0),Math.sin(G.ph)], c0=[p0[0],ce*p0[1]-se*p0[2],se*p0[1]+ce*p0[2]];
     if(c0[0]*V0[0]+c0[1]*V0[1]<0){ V0=[-V0[0],-V0[1],0]; Rv=[s[0],s[1],0]; } }
@@ -7995,6 +8012,8 @@ function semGlobe(g,gx,gy,gr,G){ const TX=semTex(); const N=Math.round(gr*2), im
   G.sunLeft=Rv[0]*s[0]+Rv[1]*s[1]<0;
   const el_=G.solar?0:el, V=[Math.cos(el_)*V0[0],Math.cos(el_)*V0[1],Math.sin(el_)], U=[-Math.sin(el_)*V0[0],-Math.sin(el_)*V0[1],Math.cos(el_)];
   const lat0=G.ph, shadow=!!G.solar;
+  const gk=[N,G.gm.toFixed(4),G.lS.toFixed(5),G.ph.toFixed(4),G.eps.toFixed(5),shadow,shadow&&G.Mv?G.Mv.map(x=>x.toFixed(4)).join(':'):'',S.lon,!!TX].join(',');
+  if(SGC.key!==gk){ SGC.key=gk; const img=g.createImageData(N,N), d=img.data;
   for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const x=(i+0.5)/gr-1, y=1-(j+0.5)/gr, q=x*x+y*y; if(q>1) continue; const z=Math.sqrt(1-q);
     const n=[x*Rv[0]+y*U[0]+z*V[0],x*Rv[1]+y*U[1]+z*V[1],x*Rv[2]+y*U[2]+z*V[2]];
     const ye=ce*n[1]+se*n[2], ze=-se*n[1]+ce*n[2], la=Math.asin(Math.max(-1,Math.min(1,ze))), lo=Math.atan2(ye,n[0])-G.gm-S.lon*D2R;   /* lo: longitude east of you */
@@ -8009,8 +8028,8 @@ function semGlobe(g,gx,gy,gr,G){ const TX=semTex(); const N=Math.round(gr*2), im
     const mer=Math.abs(Math.atan2(Math.sin(lo),Math.cos(lo)))*Math.cos(la)<1.6/gr;
     if(grid){ r+=18; gg+=18; b+=18; } if(tr){ r=r*0.5+128; gg=gg*0.5+100; b=b*0.5+40; } if(you||mer){ r=255; gg=200; b=120; } if(shd===1){ r=255; gg=150; b=90; } else if(shd===2){ r=255; gg=70; b=40; }
     const o=4*(j*N+i); d[o]=r; d[o+1]=gg; d[o+2]=b; d[o+3]=255; }
-  const tmp=document.createElement('canvas'); tmp.width=tmp.height=N; tmp.getContext('2d').putImageData(img,0,0);
-  g.drawImage(tmp,gx-gr,gy-gr,2*gr,2*gr);
+  if(!SGC.c) SGC.c=document.createElement('canvas'); SGC.c.width=SGC.c.height=N; SGC.c.getContext('2d').putImageData(img,0,0); }
+  const tmp=SGC.c; g.drawImage(tmp,gx-gr,gy-gr,2*gr,2*gr);
   /* your place: where your latitude circle meets your meridian */
   const ph=G.ph, lo=G.gm+S.lon*D2R, pe=[Math.cos(ph)*Math.cos(lo),Math.cos(ph)*Math.sin(lo),Math.sin(ph)], pc=[pe[0],ce*pe[1]-se*pe[2],se*pe[1]+ce*pe[2]];
   const px=pc[0]*Rv[0]+pc[1]*Rv[1]+pc[2]*Rv[2], py=pc[0]*U[0]+pc[1]*U[1]+pc[2]*U[2], pz=pc[0]*V[0]+pc[1]*V[1]+pc[2]*V[2];
@@ -8045,7 +8064,7 @@ function frame(now){ raf=0;
   if(EC&&EC.on&&EC.play){ const t=now/1000, L=ecLocal(); if(EC.tl&&L){ const q=EC.ev.kind==='sol'?ecSol(EC.t,S.lat,S.lon):null, slow=q&&q.Rm>q.Rs&&q.d-(q.Rm-q.Rs)<0.05*q.Rs?0.12:1; EC.t+=Math.min(0.1,t-EC.tl)*EC.spd*slow/86400; if(EC.t>=L.t1){ EC.t=L.t1; EC.play=false; } ecTimeUI(); } EC.tl=t; dirty=true; }
   if(SEM.run){ const t=now/1000; if(SEM.tl) S.jd+=Math.min(0.1,t-SEM.tl)*SEM.rate; SEM.tl=t; dirty=true; }
   if(dirty){ dirty=false; sky(); if(S.track&&S.sel){ const hh=apparent(selH()); S.az=(Math.atan2(hh[0],hh[1])*R2D+360)%360; if(!S.dome) S.alt=clamp(Math.asin(hh[2])*R2D,-89,89); }
-    draw(); if(SEM.on){ try{ semDraw(); }catch(e){ console.error(e); } } if(S.sel&&now-infoT>400){ infoT=now; info(); } try{ c3eName(); }catch(e){} }
+    if(!SEM.on) draw(); else { try{ semDraw(); }catch(e){ console.error(e); } } if(S.sel&&now-infoT>400){ infoT=now; info(); } try{ c3eName(); }catch(e){} }
   if(S.playing||dirty||PCY.run||PP.run||SEM.run||(EC&&EC.on&&EC.play)||(WD&&WD.on&&WD.play)) raf=requestAnimationFrame(frame); }
 function kick(){ dirty=true; if(!raf&&!root.hidden) raf=requestAnimationFrame(frame); }
 /* ---------------------------------------------------------------- input */
@@ -8075,7 +8094,7 @@ function centre(){ if(!S.sel) return; const hh=apparent(selH()); S.az=(Math.atan
   if(S.alt<-1&&S.L.gnd) toast(($('plSelT').textContent||'It')+' is below the horizon now. Turn off the ground in Layers to see through it.'); if(S.fov>90) S.fov=60; kick(); }
 function toast(t){ const el=$('plToast'); el.textContent=t; el.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('on'),3600); }
 window.addEventListener('keydown',e=>{ if(root.hidden||/INPUT|SELECT|TEXTAREA/.test(document.activeElement&&document.activeElement.tagName)) return;
-  const k=e.key; if(k==='Escape'){ /* one step back at a time: an open panel, then the selection, then the planetarium */ const op=['plUp','plLay','plWh','plCyc','plPol','plGM','plSEM','plEcl','plWd'].find(id=>!$(id).hidden); if(op){ const x=root.querySelector('[data-x="'+op+'"]')||$(op).querySelector('.plX'); if(x) x.click(); else $(op).hidden=true; return; } if(S.sel) select(null); else close(); return; }
+  const k=e.key; if(k==='Escape'){ /* one step back at a time: an open panel, then the selection, then the planetarium */ const op=['plCyc','plPol','plGM','plSEM','plEcl','plWd'].find(id=>!$(id).hidden); if(op){ const x=root.querySelector('[data-x="'+op+'"]')||$(op).querySelector('.plX'); if(x) x.click(); else $(op).hidden=true; return; } if(S.sel) select(null); else close(); return; }
   if(k===' '){ e.preventDefault(); play(!S.playing); return; }
   const st=S.fov/20; if(k==='ArrowLeft'){ S.az=(S.az-st+360)%360; } else if(k==='ArrowRight'){ S.az=(S.az+st)%360; } else if(k==='ArrowUp'){ S.alt=clamp(S.alt+st,-89.9,89.9); } else if(k==='ArrowDown'){ S.alt=clamp(S.alt-st,-89.9,89.9); }
   else if(k==='+'||k==='='){ S.fov=clamp(S.fov/1.25,0.01,210); } else if(k==='-'||k==='_'){ S.fov=clamp(S.fov*1.25,0.5,210); } else return; e.preventDefault(); kick(); });
@@ -8109,11 +8128,11 @@ $('plHemi').onclick=()=>{ const south=S.lat>=0; let i;
 setTimeout(hemiUI,0);
 $('plBort').value=S.bortle; $('plBortV').textContent=S.bortle; $('plBort').oninput=e=>{ S.bortle=+e.target.value; $('plBortV').textContent=S.bortle; save(); kick(); };
 $('plBoostV').textContent='±0'; $('plBoost').oninput=e=>{ S.boost=+e.target.value; $('plBoostV').textContent=(S.boost>0?'+':S.boost<0?'−':'±')+Math.abs(S.boost); kick(); };
-const panel=(id,btn,fn)=>{ $(btn).onclick=()=>{ const el=$(id), o=el.hidden; ['plUp','plLay','plCyc','plWh','plGM'].forEach(x=>{ $(x).hidden=true; }); ['plUpBtn','plLayBtn','plWhBtn'].forEach(x=>$(x).setAttribute('aria-expanded','false'));
+const panel=(id,btn,fn)=>{ $(btn).onclick=()=>{ const el=$(id), o=el.hidden; ['plCyc','plGM'].forEach(x=>{ $(x).hidden=true; }); ['plUpBtn','plLayBtn','plWhBtn'].forEach(x=>$(x).setAttribute('aria-expanded','false'));
   el.hidden=!o; $(btn).setAttribute('aria-expanded',String(o)); if(o&&fn) fn(); }; };
 panel('plUp','plUpBtn',tonight);
 $('plTel').onclick=()=>telZoom();
-$('plSelFind').onclick=()=>{ FD.i=-1; $('plWhSel').value='-1'; if($('plWh').hidden) $('plWhBtn').click(); else { fdInfo(); } }; panel('plLay','plLayBtn'); panel('plWh','plWhBtn',()=>{ if(innerWidth>=720){ root.classList.add('mini'); $('plSideBtn').setAttribute('aria-expanded','false'); } fdInfo(); if(!(FD.i<0&&S.sel)) fdPoint(); });   /* Find takes the left column; Place & time comes back with its button */
+$('plSelFind').onclick=()=>{ FD.i=-1; $('plWhSel').value='-1'; if($('plWh').hidden) $('plWhBtn').click(); else { fdInfo(); } }; panel('plLay','plLayBtn'); panel('plWh','plWhBtn',()=>{ if(root.classList.contains('mini')){ root.classList.remove('mini'); $('plSideBtn').setAttribute('aria-expanded','true'); } $('plWh').hidden=false; fdInfo(); if(!(FD.i<0&&S.sel)) fdPoint(); });   /* Find takes the left column; Place & time comes back with its button */
 $('plWhSel').onchange=e=>{ FD.i=+e.target.value; if(FD.i<0&&!S.sel){ FD.i=0; e.target.value='0'; } $('plWhLB').hidden=FD.i<0||!FDT[FD.i][1].custom; fdInfo(); fdPoint(); };
 $('plWhL').oninput=e=>{ FD.l=+e.target.value; $('plWhLV').textContent=FD.l+'°'; fdInfo(); kick(); };
 $('plWhB').oninput=e=>{ FD.b=+e.target.value; $('plWhBV').textContent=FD.b+'°'; fdInfo(); kick(); };
@@ -8123,7 +8142,8 @@ setInterval(()=>{ if(!$('plWh').hidden&&!root.hidden) fdInfo(); },1000);
 $('plGMBtn').onclick=()=>{ const on=!GM.on; if(on){ if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } } gmSet(on); };
 let AMG=false;   /* the ground was hidden by Planet as Moon */
 { const ORDER=['Off','Mercury','Venus','Mars','Jupiter','Saturn','Uranus','Neptune'], RK={Mercury:2439.7,Venus:6051.8,Mars:3389.5,Jupiter:69911,Saturn:58232,Uranus:25362,Neptune:24622}; const b=$('plAsMoon');
-  b.onclick=()=>{ const i=(ORDER.indexOf(S.asMoon||'Off')+1)%ORDER.length; S.asMoon=i?ORDER[i]:null; b.setAttribute('aria-pressed',String(!!i)); b.textContent=i?ORDER[i]+' as our Moon':'Planet as Moon';
+  window.__asMoonOrder=ORDER;
+  b.onclick=()=>{ const tg=b.dataset.target; delete b.dataset.target; const i=tg!=null?Math.max(0,ORDER.indexOf(tg)):(ORDER.indexOf(S.asMoon||'Off')+1)%ORDER.length; S.asMoon=i?ORDER[i]:null; b.setAttribute('aria-pressed',String(!!i)); b.textContent=i?'Planetary Scale · '+ORDER[i]:'Planetary Scale';
    /* the planet takes the Moon's place, so when the Moon is below the horizon it would be hidden by the ground: see through the
       ground for as long as this is on, and put the ground back afterwards */
    const up=enu(ST.bodies.Moon.v)[2]>-0.004;
@@ -8155,7 +8175,7 @@ cv.addEventListener('wheel',e=>{ if(!GM.on) return; e.stopImmediatePropagation()
 cv.addEventListener('dblclick',e=>{ if(GM.on) e.stopImmediatePropagation(); },true);
 root.querySelectorAll('.plX').forEach(b=>b.onclick=()=>{ $(b.dataset.x).hidden=true; ['plUpBtn','plLayBtn'].forEach(x=>$(x).setAttribute('aria-expanded','false')); });
 $('plSelX').onclick=()=>select(null);
-$('plCycBtn').onclick=()=>{ const on=!PCY.on; if(on&&PP.on) ppOn(false); if(on){ if(GM.on) gmSet(false); if(SEM.on) semOn(false); } cyOn(on); ['plUp','plLay','plWh'].forEach(x=>$(x).hidden=true); ['plUpBtn','plLayBtn'].forEach(x=>$(x).setAttribute('aria-expanded','false')); $('plCyc').hidden=!on; };
+$('plCycBtn').onclick=()=>{ const on=!PCY.on; if(on&&PP.on) ppOn(false); if(on){ if(GM.on) gmSet(false); if(SEM.on) semOn(false); } cyOn(on); (window.__plFold&&window.__plFold()); ['plUpBtn','plLayBtn'].forEach(x=>$(x).setAttribute('aria-expanded','false')); $('plCyc').hidden=!on; };
 root.querySelectorAll('[data-cyp]').forEach(c=>c.onchange=()=>{ PCY.PL[c.dataset.cyp]=c.checked; kick(); });
 $('plPolBtn').onclick=()=>{ const on=!PP.on; if(on){ if(GM.on) gmSet(false); if(SEM.on) semOn(false); } ppOn(on); };
 $('plSemBtn').onclick=()=>semOn(!SEM.on);
@@ -8169,13 +8189,13 @@ root.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{ const k=b.dataset.
 ['plCycBtn','plPolBtn','plGMBtn','pl3dBtn'].forEach(id=>{ const b=$(id); if(b) b.addEventListener('click',()=>{ if(SEM.on&&id!=='plSemBtn') semOn(false); },true); });
 /* the left column holds one panel at a time: opening any panel folds the others away (Place & time included).
    A mode that is still on with its panel folded (Full cycle, Pole stars, Galactic map) shows its panel again on the first press. */
-{ const COL=['plUp','plLay','plWh','plCyc','plPol','plGM','plSEM'], BT={plUp:'plUpBtn',plLay:'plLayBtn',plWh:'plWhBtn'};
+{ const COL=['plCyc','plPol','plGM','plSEM'], BT={};   /* Find lives inside Place & time: one card */
   let busy=false;
   const fold=keep=>{ if(busy) return; busy=true; COL.forEach(x=>{ if(x!==keep&&!$(x).hidden){ $(x).hidden=true; if(BT[x]) $(BT[x]).setAttribute('aria-expanded','false'); } });
     if(keep!=='plSide'&&!root.classList.contains('mini')){ root.classList.add('mini'); $('plSideBtn').setAttribute('aria-expanded','false'); } busy=false; };
   const mo=new MutationObserver(ms=>{ ms.forEach(m=>{ const t=m.target;
     if(t===root){ if(!root.classList.contains('mini')&&(m.oldValue||'').split(' ').indexOf('mini')>=0) fold('plSide'); }
-    else if(!t.hidden&&(m.oldValue!==null||true)) fold(t.id); }); });
+    else if(!t.hidden&&(m.oldValue!==null||true)&&t.id!=='plWh') fold(t.id); }); });
   COL.forEach(x=>mo.observe($(x),{attributes:true,attributeFilter:['hidden']})); mo.observe(root,{attributes:true,attributeFilter:['class'],attributeOldValue:true});
   [['plCycBtn','plCyc',()=>PCY.on],['plPolBtn','plPol',()=>PP.on],['plGMBtn','plGM',()=>GM.on],['plSemBtn','plSEM',()=>SEM.on]].forEach(([b,p,on])=>$(b).addEventListener('click',e=>{ if(on()&&$(p).hidden){ e.stopImmediatePropagation(); $(p).hidden=false; } },true)); }
 /* ======================================================================== ECLIPSES
@@ -8232,8 +8252,12 @@ function ecListYear(Y,kind){ const j0=ecJD(Y), j1=ecJD(Y+1), L=[]; let j=j0-1.5;
 function ecListNext(kind,n){ const L=[]; let j=jdNow()-0.3; for(let k=0;k<n;k++){ const e=semNextEcl(kind,j); if(!e) break; L.push(ecEnrich(e,kind)); j=e.jd+20; } return L; }
 /* the local circumstances of the chosen eclipse, cached by place */
 function ecLocal(){ const e=EC.ev; if(!e) return null; const key=e.jd.toFixed(5)+'|'+S.lat.toFixed(3)+'|'+S.lon.toFixed(3); if(EC.loc&&EC.loc.key===key) return EC.loc;
-  let r; if(e.kind==='sol'){ const lat=S.lat, lon=S.lon; r=ecFind(j=>ecSol(j,lat,lon),e.jd,0.17,{o:q=>q.Rs+q.Rm,i:q=>Math.abs(q.Rm-q.Rs)}); }
-  else r=e.L;
+  let r; if(e.kind==='sol'){ const at=(lat,lon)=>ecFind(j=>ecSol(j,lat,lon),e.jd,0.17,{o:q=>q.Rs+q.Rm,i:q=>Math.abs(q.Rm-q.Rs)});
+    r=at(S.lat,S.lon); const c=r.c.o, up=c[0]!=null&&[c[0],r.max,c[1]].some(j=>ecSol(j,S.lat,S.lon).alt>-0.6);
+    if(up) r.obs={lat:S.lat,lon:S.lon,name:S.place,here:true};
+    else { /* not visible from here: show it from where it is best seen, and say so */ const B=e.best; r.why=c[0]==null?'the Moon passes clear of the Sun there':'the Sun is below the horizon there throughout';
+      r=Object.assign(at(B.lat,B.lon),{why:r.why}); r.obs={lat:B.lat,lon:B.lon,name:(e.type==='Partial'?'the point of greatest eclipse':'the centre of the '+e.type.toLowerCase()+' path')+' ('+Math.abs(B.lat).toFixed(1)+'° '+(B.lat>=0?'N':'S')+', '+Math.abs(B.lon).toFixed(1)+'° '+(B.lon>=0?'E':'W')+')',here:false}; } }
+  else { r=e.L; r.obs={lat:S.lat,lon:S.lon,name:S.place,here:true}; }
   const c=r.c, first=e.kind==='sol'?c.o[0]:c.p[0], last=e.kind==='sol'?c.o[1]:c.p[1];
   r.t0=first!=null?first-10/1440:r.max-0.07; r.t1=last!=null?last+10/1440:r.max+0.07; r.key=key; EC.loc=r; return r; }
 const ecHM=jd=>jd==null?'—':fmtT(jd,true);
@@ -8253,17 +8277,18 @@ function ecInfo(){ const e=EC.ev, D=$('plEcInfo'); if(!D) return; if(!e){ D.inne
   let h=''; const gp=tzParts(e.jd,'UTC'), gU=String(gp.h).padStart(2,'0')+':'+String(gp.m).padStart(2,'0')+' UT';
   if(e.kind==='sol'){ const B=e.best, q=L.qm, mag=(q.Rs+q.Rm-q.d)/(2*q.Rs), ob=ecOv(q.Rs,q.Rm,q.d), seen=L.c.o[0]!=null;
     h+=row('Eclipse',e.type+' solar · greatest '+gU)+row('Best seen from',Math.abs(B.lat).toFixed(1)+'° '+(B.lat>=0?'N':'S')+', '+Math.abs(B.lon).toFixed(1)+'° '+(B.lon>=0?'E':'W'));
+    if(!L.obs.here) h+=row('From '+S.place,'not visible: '+L.why.replace('there','here'))+row('Shown from',L.obs.name);
     if(!seen) h+=row('From '+S.place,'no eclipse: the Moon passes clear of the Sun here');
     else { const tot=L.c.i[0]!=null, kind=tot?(q.Rm>q.Rs?'total':'annular'):'partial';
-      h+=row('From '+S.place,kind+', magnitude '+mag.toFixed(3)+', '+(ob*100).toFixed(1)+' % of the Sun covered')+row('Partial begins',ecHM(L.c.o[0]))+(tot?row(q.Rm>q.Rs?'Totality':'Ring of fire',ecHM(L.c.i[0])+' → '+ecHM(L.c.i[1])+' · '+ecDur(L.c.i[1]-L.c.i[0])):'')+row('Maximum',ecHM(L.max)+' · Sun '+q.alt.toFixed(0)+'° up')+row('Partial ends',ecHM(L.c.o[1]));
-      if(q.alt<0) h+=row('But','the Sun is below your horizon at maximum'); } }
+      h+=row(L.obs.here?'From '+S.place:'There',kind+', magnitude '+mag.toFixed(3)+', '+(ob*100).toFixed(1)+' % of the Sun covered')+row('Partial begins',ecHM(L.c.o[0]))+(tot?row(q.Rm>q.Rs?'Totality':'Ring of fire',ecHM(L.c.i[0])+' → '+ecHM(L.c.i[1])+' · '+ecDur(L.c.i[1]-L.c.i[0])):'')+row('Maximum',ecHM(L.max)+' · Sun '+q.alt.toFixed(0)+'° up')+row('Partial ends',ecHM(L.c.o[1]));
+      if(q.alt<0) h+=row('But','the Sun is below the horizon at maximum'); } }
   else { const c=L.c, am=ecAltMoon(L.max);
     h+=row('Eclipse',e.type+' lunar · greatest '+gU)+row('Umbral magnitude',e.umag.toFixed(3))+row('Penumbra',ecHM(c.p[0])+' → '+ecHM(c.p[1]))+row('Umbra (partial)',c.u[0]!=null?ecHM(c.u[0])+' → '+ecHM(c.u[1]):'—')+(c.t[0]!=null?row('Totality',ecHM(c.t[0])+' → '+ecHM(c.t[1])+' · '+ecDur(c.t[1]-c.t[0])):'')+row('From '+S.place,am>0?'the Moon is '+am.toFixed(0)+'° up at greatest':'the Moon is below your horizon at greatest'); }
   h+=row('Times',S.tz==='UTC'?'UTC':'local time, '+S.tz);
   D.innerHTML=h; }
 function ecTimeUI(){ const L=ecLocal(), sl=$('plEcT'); if(!L||!sl) return; sl.value=String(Math.round(1000*(EC.t-L.t0)/(L.t1-L.t0))); $('plEcPlay').textContent=EC.play?'❚❚ Pause':'▶ Play'; ecChart(); }
 function ecChart(){ const c=$('plEcCv'); if(!c) return; const L=ecLocal(), x=c.getContext('2d'), w=c.width, h=c.height; x.clearRect(0,0,w,h); if(!L) return;
-  const N=120, e=EC.ev, val=[]; for(let i=0;i<=N;i++){ const j=L.t0+(L.t1-L.t0)*i/N; if(e.kind==='sol'){ const q=ecSol(j,S.lat,S.lon); val.push(ecOv(q.Rs,q.Rm,q.d)); } else { const q=ecLun(j); val.push(ecCl((q.ru+q.Sm-q.d)/(2*q.Sm),0,1.6)/1.6); } }
+  const N=120, e=EC.ev, val=[]; for(let i=0;i<=N;i++){ const j=L.t0+(L.t1-L.t0)*i/N; if(e.kind==='sol'){ const q=ecSol(j,L.obs.lat,L.obs.lon); val.push(ecOv(q.Rs,q.Rm,q.d)); } else { const q=ecLun(j); val.push(ecCl((q.ru+q.Sm-q.d)/(2*q.Sm),0,1.6)/1.6); } }
   const X=i=>18+(w-26)*i/N, Y=v=>h-22-(h-36)*v;
   x.strokeStyle='rgba(236,230,218,.18)'; x.lineWidth=1; x.beginPath(); x.moveTo(18,Y(0)); x.lineTo(w-8,Y(0)); x.moveTo(18,Y(1)); x.lineTo(w-8,Y(1)); x.stroke();
   x.fillStyle='rgba(255,197,138,.18)'; x.beginPath(); x.moveTo(X(0),Y(0)); val.forEach((v,i)=>x.lineTo(X(i),Y(v))); x.lineTo(X(N),Y(0)); x.fill();
@@ -8282,8 +8307,8 @@ function ecDraw(){ const fr=plFr(), e=EC.ev; g.setTransform(DPR,0,0,DPR,0,0); g.
   if(e.kind==='sol') ecDrawSol(cx,cy,side,fr); else ecDrawLun(cx,cy,side,fr,L);
   /* the clock */
   g.textAlign='center'; g.font='300 30px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.95)'; g.fillText(fmtT(EC.t,true),cx,fr.b-34);
-  g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.62)'; g.fillText(fmtD(EC.t)+' · '+(S.tz==='UTC'?'UTC':S.tz)+' · '+S.place+(EC.play?' · '+(EC.spd/60)+' min per second':''),cx,fr.b-14); }
-function ecDrawSol(cx,cy,side,fr){ const top=118, q=ecSol(EC.t,S.lat,S.lon), G=q.G, se=ecENU(G,S.lat,S.lon,vun(q.s)), me=ecENU(G,S.lat,S.lon,vun(q.m));
+  g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.62)'; g.fillText(fmtD(EC.t)+' · '+(S.tz==='UTC'?'UTC':'your clock, '+S.tz)+' · '+(L.obs&&!L.obs.here?'seen from '+L.obs.name.split(' (')[0]:S.place)+(EC.play?' · '+(EC.spd/60)+' min per second':''),cx,fr.b-14); }
+function ecDrawSol(cx,cy,side,fr){ const top=118, OB=EC.loc.obs, q=ecSol(EC.t,OB.lat,OB.lon), G=q.G, se=ecENU(G,OB.lat,OB.lon,vun(q.s)), me=ecENU(G,OB.lat,OB.lon,vun(q.m));
   let rgt=vcr(se,[0,0,1]); if(vln(rgt)<1e-6) rgt=[1,0,0]; rgt=vun(rgt); const up=vcr(rgt,se);
   const k=side*0.13*EC.zoom/q.Rs, Rp=q.Rs*k, Mp=q.Rm*k, mx=cx+vdt(me,rgt)/vdt(me,se)*k, my=cy-vdt(me,up)/vdt(me,se)*k;
   const ob=ecOv(q.Rs,q.Rm,q.d), tot=q.Rm>q.Rs&&q.d<q.Rm-q.Rs, ann=q.Rm<q.Rs&&q.d<q.Rs-q.Rm, gap=q.d-(q.Rm-q.Rs), near=q.Rm>q.Rs&&gap>=0&&gap<0.02*q.Rs, below=q.alt<-0.6;
@@ -8316,7 +8341,8 @@ function ecDrawSol(cx,cy,side,fr){ const top=118, q=ecSol(EC.t,S.lat,S.lon), G=q
   g.textAlign='center'; g.font='500 15px Figtree,system-ui,sans-serif'; g.fillStyle=naked&&lum>0.45?'rgba(20,26,40,.9)':'rgba(255,217,176,.95)'; g.fillText(st,cx,top+8);
   g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle=naked&&lum>0.45?'rgba(20,26,40,.75)':'rgba(236,230,218,.7)';
   g.fillText((ob*100).toFixed(ob>0.99?2:1)+' % of the Sun covered · magnitude '+Math.max(0,(q.Rs+q.Rm-q.d)/(2*q.Rs)).toFixed(3)+' · Sun '+q.alt.toFixed(1)+'° '+(q.alt<0?'below the horizon':'up')+' · zenith up',cx,top+28);
-  if(below){ g.fillStyle='rgba(236,230,218,.85)'; g.fillText('From here the Sun is below the horizon now: try “From the best place”',cx,cy+Rp*1.6+24); }
+  if(below){ g.fillStyle='rgba(236,230,218,.85)'; g.fillText('The Sun has set (or not yet risen) there at this moment',cx,cy+Rp*1.6+24); }
+  if(!OB.here){ g.font='500 12.5px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(255,210,140,.95)'; g.fillText('Not visible from '+S.place.split(',')[0]+' · shown from '+OB.name,cx,top+48); }
   else if(!naked){ g.fillStyle='rgba(236,230,218,.55)'; g.fillText('Seen through eclipse glasses (switch them off on the card to see the sky)',cx,cy+Rp*1.9); } }
 function ecDrawLun(cx,cy,side,fr,L){ const q=ecLun(EC.t), a=q.a; let e=vun(vcr([0,0,1],a)); const n=vcr(a,e);
   const k=side*0.42/q.rp*EC.zoom, P=j=>{ const r=ecLun(j), m=vun(r.G.M), ee=vun(vcr([0,0,1],r.a)), nn=vcr(r.a,ee), w=vdt(m,r.a); return [cx-vdt(m,ee)/w*k, cy-vdt(m,nn)/w*k]; };
@@ -8328,7 +8354,7 @@ function ecDrawLun(cx,cy,side,fr,L){ const q=ecLun(EC.t), a=q.a; let e=vun(vcr([
   g.font='500 11px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(200,200,215,.6)'; g.textAlign='center'; g.fillText('penumbra: part of the Sun hidden',cx,cy-pr-8); g.fillStyle='rgba(255,170,130,.75)'; g.fillText('umbra: all of the Sun hidden',cx,cy-ur+16);
   /* the Moon's path, with the contacts */
   g.strokeStyle='rgba(236,230,218,.35)'; g.setLineDash([3,4]); g.beginPath(); for(let i=0;i<=60;i++){ const p=P(L.t0+(L.t1-L.t0)*i/60); i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.stroke(); g.setLineDash([]);
-  [['P1',L.c.p[0]],['U1',L.c.u[0]],['U2',L.c.t[0]],['U3',L.c.t[1]],['U4',L.c.u[1]],['P4',L.c.p[1]]].forEach(([nm,j],i)=>{ if(j==null) return; const p=P(j); g.fillStyle='rgba(236,230,218,.8)'; g.beginPath(); g.arc(p[0],p[1],2.5,0,TAU); g.fill(); g.fillStyle='rgba(236,230,218,.6)'; g.fillText(nm+' '+fmtT(j),p[0],p[1]+(i%2?-10:18)); });
+  const mR=q.Sm*k; [['P1',L.c.p[0]],['U1',L.c.u[0]],['U2',L.c.t[0]],['U3',L.c.t[1]],['U4',L.c.u[1]],['P4',L.c.p[1]]].forEach(([nm,j],i)=>{ if(j==null) return; const p=P(j); g.strokeStyle='rgba(236,230,218,.22)'; g.lineWidth=1; g.beginPath(); g.arc(p[0],p[1],mR,0,TAU); g.stroke(); g.fillStyle='rgba(236,230,218,.8)'; g.beginPath(); g.arc(p[0],p[1],2.5,0,TAU); g.fill(); g.fillStyle='rgba(236,230,218,.6)'; g.fillText(nm+' '+fmtT(j),p[0],p[1]+(i%2?-10:18)); });
   /* the Moon, darkened by the shadow it is in: grey in the penumbra, copper in the umbra (sunlight bent through every sunrise and sunset on Earth) */
   const mp=P(EC.t), mr=q.Sm*k; g.save(); moonFace(g,mp[0],mp[1],mr,Math.PI,true); g.restore();
   g.save(); g.beginPath(); g.arc(mp[0],mp[1],mr+0.5,0,TAU); g.clip(); g.globalCompositeOperation='multiply';
@@ -8337,9 +8363,10 @@ function ecDrawLun(cx,cy,side,fr,L){ const q=ecLun(EC.t), a=q.a; let e=vun(vcr([
   g.restore();
   const umag=(q.ru+q.Sm-q.d)/(2*q.Sm), st=umag>=1?'Totality: the Moon turns copper':umag>0?'Partial: the umbra bites':((q.rp+q.Sm-q.d)/(2*q.Sm))>0?'Penumbral: a faint shading':'Outside the shadow', am=ecAltMoon(EC.t);
   g.font='500 15px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(255,217,176,.95)'; g.fillText(st,cx,118+8);
-  g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.7)'; g.fillText('umbral magnitude '+umag.toFixed(3)+' · Moon '+am.toFixed(1)+'° '+(am<0?'below your horizon':'up')+' · celestial north up, east left',cx,118+28); }
+  g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.7)'; g.fillText((umag>0?'umbral magnitude '+umag.toFixed(3)+' · ':'')+'the shadow seen from the Moon’s side of the Earth · celestial north up, east left',cx,118+28);
+  g.font='500 12.5px Figtree,system-ui,sans-serif'; g.fillStyle=am>0?'rgba(159,224,176,.95)':'rgba(255,210,140,.95)'; g.fillText(am>0?'Visible from '+S.place.split(',')[0]+': the Moon is '+am.toFixed(0)+'° up':'Not visible from '+S.place.split(',')[0]+' now: the Moon is below the horizon (the eclipse is the same from anywhere it is up)',cx,118+48); }
 /* ---- wiring */
-function ecSet(on){ if(on){ try{ if(GM.on) gmSet(false); if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } if(typeof c3eOff==='function') c3eOff(); if(typeof g3eOff==='function') g3eOff(); }catch(err){} ['plLay','plWh'].forEach(x=>{ const el=$(x); if(el) el.hidden=true; }); }
+function ecSet(on){ if(on){ try{ if(GM.on) gmSet(false); if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } if(typeof c3eOff==='function') c3eOff(); if(typeof g3eOff==='function') g3eOff(); }catch(err){} (window.__plFold&&window.__plFold()); }
   if(on){ try{ if(S.sel) select(null); if(WD&&WD.on) wdSet(false); }catch(err){} }
   EC.on=on; EC.play=false; $('plEclBtn').setAttribute('aria-pressed',String(on)); $('plEcl').hidden=!on; root.classList.toggle('gmap',on||GM.on);
   if(on&&!EC.list.length){ EC.year=null; ecFill(ecListNext(EC.kind,4)); } else if(on) ecUI(); kick(); }
@@ -8347,7 +8374,7 @@ window.__ecl={EC,ecSet,ecSol,ecLun,ecBest,ecListYear,ecListNext,ecLocal,ecPick};
 $('plEclBtn').onclick=()=>ecSet(!EC.on);
 root.querySelector('[data-x="plEcl"]').addEventListener('click',()=>ecSet(false));
 /* only the views that take over the screen end the eclipse view; Place & time, Tonight, Find and Layers work alongside it (a new place recomputes the eclipse) */
-root.querySelectorAll('.plGrp button').forEach(b=>{ if(['plCycBtn','plPolBtn','plSemBtn','pl3dBtn','plGMBtn','plAsMoon','plExit'].includes(b.id)||/^AR$/.test(b.textContent.trim())) b.addEventListener('click',()=>{ if(EC.on) ecSet(false); },true); });
+root.querySelectorAll('.plGrp button').forEach(b=>{ if(['plCycBtn','plPolBtn','plSemBtn','pl3dBtn','plGMBtn','plAsMoon','plExit'].includes(b.id)||/^(AR|Augmented Reality)$/.test(b.textContent.trim())) b.addEventListener('click',()=>{ if(EC.on) ecSet(false); },true); });
 root.querySelectorAll('#plEcK button').forEach(b=>b.onclick=()=>{ EC.kind=b.dataset.k; ecFill(EC.year==null?ecListNext(EC.kind,4):ecListYear(EC.year,EC.kind)); });
 $('plEcPrev').onclick=()=>{ EC.year=(EC.year==null?new Date().getFullYear():EC.year)-1; ecFill(ecListYear(EC.year,EC.kind)); };
 $('plEcNext').onclick=()=>{ EC.year=(EC.year==null?new Date().getFullYear():EC.year)+1; ecFill(ecListYear(EC.year,EC.kind)); };
@@ -8449,12 +8476,12 @@ function wdLook(){ const X=wdBody(WD.jd), I=wdInfo(X), fr=plFr(), asp=fr.r/Math.
 function wdUI(){ $('plWdW').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.w===WD.w)));
   const S2=$('plWdS'); S2.innerHTML=''; WDS[WD.w].forEach((s,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=s[0]; b.setAttribute('aria-pressed',String(i===WD.si)); b.onclick=()=>{ WD.si=i; wdUI(); wdLook(); }; S2.appendChild(b); });
   if(!WDR[WD.w].some(r=>r[0]===WD.rate)) WD.rate=WDR[WD.w][0][0]; $('plWdSpd').textContent=WDR[WD.w].find(r=>r[0]===WD.rate)[1]; $('plWdPlay').textContent=WD.play?'❚❚ Pause':'▶ Play'; $('plWdNext').style.display=WD.w==='mars'?'':'none'; kick(); }
-function wdSet(on){ if(on){ try{ if(EC.on) ecSet(false); if(GM.on) gmSet(false); if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } if(typeof c3eOff==='function') c3eOff(); if(typeof g3eOff==='function') g3eOff(); if(S.sel) select(null); }catch(err){} ['plUp','plLay','plWh'].forEach(x=>{ const el=$(x); if(el) el.hidden=true; }); WD.jd=S.jd; }
+function wdSet(on){ if(on){ try{ if(EC.on) ecSet(false); if(GM.on) gmSet(false); if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } if(typeof c3eOff==='function') c3eOff(); if(typeof g3eOff==='function') g3eOff(); if(S.sel) select(null); }catch(err){} (window.__plFold&&window.__plFold()); WD.jd=S.jd; }
   WD.on=on; WD.play=false; $('plWdBtn').setAttribute('aria-pressed',String(on)); $('plWd').hidden=!on; root.classList.toggle('gmap',on||GM.on||EC.on); if(on){ loadStars(); wdUI(); wdLook(); } kick(); }
 window.__wd={WD,wdBody,wdInfo,wdSet,wdLook};
 $('plWdBtn').onclick=()=>wdSet(!WD.on);
 root.querySelector('[data-x="plWd"]').addEventListener('click',()=>wdSet(false));
-root.querySelectorAll('.plGrp button').forEach(b=>{ if(['plCycBtn','plPolBtn','plSemBtn','pl3dBtn','plGMBtn','plAsMoon','plExit','plEclBtn'].includes(b.id)||/^AR$/.test(b.textContent.trim())) b.addEventListener('click',()=>{ if(WD.on) wdSet(false); },true); });
+root.querySelectorAll('.plGrp button').forEach(b=>{ if(['plCycBtn','plPolBtn','plSemBtn','pl3dBtn','plGMBtn','plAsMoon','plExit','plEclBtn'].includes(b.id)||/^(AR|Augmented Reality)$/.test(b.textContent.trim())) b.addEventListener('click',()=>{ if(WD.on) wdSet(false); },true); });
 $('plWdW').querySelectorAll('button').forEach(b=>b.onclick=()=>{ WD.w=b.dataset.w; WD.si=0; wdUI(); wdLook(); });
 $('plWdLook').onclick=()=>wdLook();
 $('plWdZoom').onclick=()=>{ const I=wdInfo(wdBody(WD.jd)); WD.fov=ecCl(I.ang*6,0.02,60); WD.az=I.aaE[0]; WD.alt=I.aaE[1]; kick(); };
@@ -8479,7 +8506,21 @@ $('plCycNoon').onclick=()=>cyAt(12,0);
 root.querySelectorAll('[data-cyt]').forEach(b=>b.onclick=()=>cyAt(+b.dataset.cyt,0));
 $('plCycMean').onclick=()=>{ /* local mean noon: 12:00 UT minus the longitude, so the figure stands upright on the meridian */
   const p=tzParts(S.jd,S.tz), j0=Math.floor(localToJd(p.Y,p.M,p.D,12,0,S.tz)-0.5)+0.5; S.jd=j0+0.5-S.lon/360; PCY.fit=true; PCY.noonTried=true; kick(); if(S.sel) info(); };
-$('plSideBtn').onclick=()=>{ const m=root.classList.toggle('mini'); $('plSideBtn').setAttribute('aria-expanded',String(!m)); };
+$('plSideBtn').onclick=()=>{ const m=root.classList.toggle('mini'); $('plSideBtn').setAttribute('aria-expanded',String(!m)); if(!m){ $('plWh').hidden=false; try{ fdInfo(); }catch(e){} } };
+/* one card, four tabs: Place & time · Find · Tonight · Display. Clicking the open tab again folds the card to its tab row */
+{ const sd=$('plSide'), pt=document.createElement('div'); pt.id='plTabPT'; while(sd.firstChild) pt.appendChild(sd.firstChild);
+  const tb=document.createElement('div'); tb.className='plTabs'; tb.setAttribute('role','tablist');
+  const T=[['pt','Place & time',pt],['find','Find',$('plWh')],['up','Tonight',$('plUp')],['lay','Display',$('plLay')]];
+  sd.append(tb,pt); T.slice(1).forEach(([,,el])=>{ sd.appendChild(el); const x=el.querySelector('.plX'); if(x) x.remove(); });
+  let cur='pt';
+  const show=k=>{ cur=k; sd.classList.remove('tabC'); T.forEach(([kk,,el,b])=>{ el.hidden=kk!==k; b.setAttribute('aria-selected',String(kk===k)); }); try{ if(k==='up') tonight(); if(k==='find') fdInfo(); }catch(e){}
+    if(root.classList.contains('mini')){ root.classList.remove('mini'); $('plSideBtn').setAttribute('aria-expanded','true'); } };
+  T.forEach(t=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','tab'); b.textContent=t[1]; t.push(b); tb.appendChild(b);
+    b.onclick=()=>{ if(t[0]===cur&&!sd.classList.contains('tabC')){ sd.classList.add('tabC'); T.forEach(([,,el,bb])=>{ el.hidden=true; bb.setAttribute('aria-selected','false'); }); } else show(t[0]); }; });
+  $('plWhBtn').onclick=()=>show('find'); $('plUpBtn').onclick=()=>show('up'); $('plLayBtn').onclick=()=>show('lay');
+  ['plWhBtn','plUpBtn','plLayBtn'].forEach(x=>$(x).style.display='none'); $('plSideBtn').textContent='Sky Today'; show('pt'); window.__plTab=show; /* a pane opened from elsewhere (the Moon card's Find, say) brings its tab forward */
+  const mo=new MutationObserver(ms=>ms.forEach(m=>{ const t=T.find(x=>x[2]===m.target); if(t&&!m.target.hidden&&t[0]!==cur) show(t[0]); })); T.forEach(t=>mo.observe(t[2],{attributes:true,attributeFilter:['hidden']}));
+  window.__plFold=()=>{ sd.classList.add('tabC'); T.forEach(([,,el,bb])=>{ el.hidden=true; bb.setAttribute('aria-selected','false'); }); }; }
 $('plCenter').onclick=centre;
 $('plTrack').onclick=e=>{ S.track=!S.track; e.target.setAttribute('aria-pressed',String(S.track)); if(S.track){ setDome(false); centre(); } };
 /* find */
@@ -11563,11 +11604,23 @@ function makeShip(){ FG={scene:new THREE.Scene(),cam:new THREE.PerspectiveCamera
  const H=new THREE.Group(); H.add(FG.eng);
  /* hull: needle nose widening to the wings, then the engine block */
  H.add(loft([[-10,0.05,0.05,0.05],[-7.5,0.85,0.32,0.28],[-4.5,1.7,0.7,0.5],[-1.5,2.4,0.92,0.62],[1.5,2.1,1.0,0.75],[4.2,1.6,1.15,0.85],[5.6,1.35,1.0,0.75]],hullM));
- /* canopy: a dark faceted wedge on the forward deck */ const cp=new THREE.Mesh(new THREE.CylinderGeometry(0,0.62,2.8,4,1),glassM); cp.rotation.x=-Math.PI/2; cp.rotation.y=Math.PI/4; cp.scale.set(1,1,0.42); cp.position.set(0,0.62,-4.2); cp.rotation.z=0; H.add(cp);
+ /* the flight deck: a tinted canopy with frame ribs */
+ { const CZ=-4.5, CY=0.52, RX=0.78, RY=0.58, RZ=1.55;
+   const glass=new THREE.MeshStandardMaterial({color:0x2c4a63,metalness:0.85,roughness:0.12,emissive:0x0a1826});   /* tinted, opaque from outside */
+   const cn=new THREE.Mesh(new THREE.SphereGeometry(1,32,16,0,Math.PI*2,0,Math.PI/2),glass); cn.scale.set(RX,RY,RZ); cn.position.set(0,CY,CZ); H.add(cn);
+   const fr=new THREE.MeshStandardMaterial({color:0x3a3f47,metalness:0.8,roughness:0.35});
+   for(const dz of [-1.1,-0.45,0.25,0.95]){ const r=Math.sqrt(Math.max(0,1-Math.pow(dz/RZ,2))); const rb=new THREE.Mesh(new THREE.TorusGeometry(1,0.035,6,24,Math.PI),fr); rb.scale.set(RX*r,RY*r,1); rb.position.set(0,CY,CZ+dz); H.add(rb); }
+   const sp=new THREE.Mesh(new THREE.TorusGeometry(1,0.035,6,32,Math.PI),fr); sp.rotation.y=Math.PI/2; sp.scale.set(RZ,RY,1); sp.position.set(0,CY,CZ); H.add(sp);
+   const sill=new THREE.Mesh(new THREE.TorusGeometry(1,0.05,6,40),fr); sill.rotation.x=Math.PI/2; sill.scale.set(RX,RZ,1); sill.position.set(0,CY,CZ); H.add(sill);
+   /* a faint glow from the instruments behind the tint */ const gl=new THREE.Mesh(new THREE.SphereGeometry(1,24,12,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({color:0x3fb7ff,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false})); gl.scale.set(RX*1.01,RY*1.01,RZ*1.01); gl.position.set(0,CY,CZ); H.add(gl);
+   /* a row of lit ports along each flank, behind the canopy */
+   for(const sg of [-1,1]) for(let k=0;k<9;k++){ const z=-3.0+k*0.5, w=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.07,0.22),litM); const T=[[-4.5,1.7,0.7],[-1.5,2.4,0.92],[1.5,2.1,1.0]], j=z<-1.5?0:1, f=(z-T[j][0])/3, hw=T[j][1]+(T[j+1][1]-T[j][1])*f, ht=T[j][2]+(T[j+1][2]-T[j][2])*f; w.position.set(sg*(hw-0.45*hw*(0.3-0.08)/(0.82*ht-0.08)+0.012),0.3,z); w.rotation.z=sg*0.75; H.add(w); } }
  /* deck superstructure and dorsal fin */ const box=(w,h,d,x,y,z,m)=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m||partM); b.position.set(x,y,z); H.add(b); return b; };
  box(1.7,0.7,3.2,0,1.25,2.9); box(1.1,0.5,1.4,0,1.75,3.4); box(0.25,0.9,1.8,0,2.2,3.9); box(3.4,0.18,1.0,0,0.95,0.6,darkM);
  for(let k=0;k<6;k++) box(0.12,0.06,0.02,-0.45+k*0.18,1.36,1.29,litM);
- /* turrets: ball mounts with short barrels */ [[0.9,1.05,-0.6],[-0.9,1.05,-0.6],[0,-0.8,-2.2],[0,-0.95,2.4]].forEach(p=>{ const t=new THREE.Mesh(new THREE.SphereGeometry(0.34,16,12),darkM); t.position.set(p[0],p[1],p[2]); H.add(t); const br=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.9,8),darkM); br.rotation.x=Math.PI/2; br.position.set(p[0],p[1],p[2]-0.5); H.add(br); const l=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,6),litM); l.position.set(p[0],p[1]+0.05,p[2]-0.3); H.add(l); });
+ /* in place of gun turrets: flush reaction-control thruster quads, with nav lights (red port, green starboard) */
+ [[1.55,0.2,-2.4,1],[-1.55,0.2,-2.4,-1],[1.25,0.35,3.9,1],[-1.25,0.35,3.9,-1]].forEach(([x,y,z,sg])=>{ const q=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.3,0.42),darkM); q.position.set(x,y,z); H.add(q); for(const dz of [-0.13,0.13]){ const n=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.1,8),darkM); n.rotation.z=Math.PI/2; n.position.set(x+sg*0.14,y,z+dz); H.add(n); } });
+ [[2.35,0.05,-1.4,0xff3b3b],[-2.35,0.05,-1.4,0x3bff7a]].forEach(([x,y,z,c])=>{ const n=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.18),new THREE.MeshBasicMaterial({color:c})); n.position.set(x,y,z); H.add(n); });
  /* habitat ring: 48 armoured segments with lit windows on the inner face, on four spokes from a collar round the hull; it spins */
  FG.ring=new THREE.Group(); const RR=4.6; for(let k=0;k<48;k++){ const a=k/48*Math.PI*2, s=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.42,1.0),k%6===0?darkM:partM); s.position.set(Math.cos(a)*RR,Math.sin(a)*RR,0); s.rotation.z=a+Math.PI/2; FG.ring.add(s);
    const w=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.03,0.16),litM); w.position.set(Math.cos(a)*(RR-0.22),Math.sin(a)*(RR-0.22),(k%2?0.22:-0.22)); w.rotation.z=a+Math.PI/2; FG.ring.add(w); }
@@ -11719,7 +11772,7 @@ const VIS=new Set();
    Space shuts the main engine and fires the retro thrusters at 1 g for as long as it is held (down to rest);
    released, the ship coasts at the speed it has; the left and right arrows turn the heading (the hull banks into the turn),
    and the up and down arrows raise and lower the nose. No panel, no read-outs. */
-const WEL={thrust:false,brake:false,l:false,r:false,u:false,d:false,sy:0,cy:0,sp:0,cp:0,oy:0,op:0,oz:1,oyS:0,opS:0,ozS:1}, WS={pos:new THREE.Vector3(),dir:new THREE.Vector3(1,0,0),yaw:0,pitch:0,phi:0,beta:0};
+const WEL={thrust:false,brake:false,l:false,r:false,u:false,d:false,sy:0,cy:0,sp:0,cp:0,oy:0,op:0,oz:1,oyS:0,opS:0,ozS:1}, WS={pos:new THREE.Vector3(),dir:new THREE.Vector3(1,0,0),yaw:0,pitch:0,phi:0,beta:0}; window.__WEL=WEL;
 const WPMAX=1.35;   /* pitch limit (≈77°), so the chase camera never flips over the pole */
 const WBOOST=250, WTAU=0.25;   /* gas visibility of the sandbox's default view; ship years per real second (the flight sandbox's default warp) */
 let WCAM=null;
@@ -14225,11 +14278,11 @@ function hfBuild(root){ const save=MODE; MODE='hist';
   const up=()=>{ HF.drag=null; HF.cv.style.cursor='grab'; }; HF.cv.addEventListener('pointerup',up); HF.cv.addEventListener('pointercancel',up);
   HF.cv.addEventListener('wheel',e=>{ e.preventDefault(); if(MG.emb&&!MG.leave){ MG.edT=null; MG.ed=clamp(MG.ed*Math.exp(e.deltaY*0.0012),3e-10,700); if(MG.ed<20) MG.tgT=[0,0,0]; return; } HF.zoom=clamp(HF.zoom*Math.exp(e.deltaY*0.0012),0.15,6); },{passive:false});
   /* the switch between this view and the close-up box, in the timeline bar */
-  const row=document.querySelector('#histBar .hrow'); if(row){ const g=document.createElement('div'); g.className='hb'; g.innerHTML='<button type="button" data-v="1" aria-pressed="true">Whole history</button><button type="button" data-v="0" aria-pressed="false">Close-up</button>';
+  const row=document.querySelector('#histBar .hrow'); if(row){ const g=document.createElement('div'); g.className='hb'; g.innerHTML='<button type="button" data-v="1" aria-pressed="true">Whole history</button><button type="button" data-v="0" aria-pressed="false">Epoch detail</button>';
     row.insertBefore(g,row.children[1]); g.querySelectorAll('button').forEach(b=>b.onclick=()=>{ HF.on=b.dataset.v==='1'; g.querySelectorAll('[data-v]').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); if(MG.ui) MG.ui.hidden=!HF.on; }); HF.btn=g;
     const m=document.createElement('div'); m.className='hb'; m.setAttribute('role','group'); m.setAttribute('aria-label','How to draw spacetime');
     m.innerHTML='<button type="button" data-mg="S" aria-pressed="false" title="Today’s slice of the funnel opens into the whole observable universe: every catalogued galaxy in 3D round us, and the CMB">Full observable universe</button>';
-    const rb=document.createElement('button'); rb.type='button'; rb.setAttribute('aria-pressed','false'); rb.title='Ride inside the funnel with the present, from the Big Bang to today, looking back at the past; drag to look around'; rb.textContent='Ride inside'; m.appendChild(rb);
+    const rb=document.createElement('button'); rb.type='button'; rb.setAttribute('aria-pressed','false'); rb.title='Ride inside the funnel with the present, from the Big Bang to today, looking back at the past; drag to look around'; rb.textContent='Comoving view'; m.appendChild(rb);
     rb.onclick=()=>{ if(!HF.on) g.querySelector('[data-v="1"]').click(); HF.ride=!HF.ride; rb.setAttribute('aria-pressed',String(HF.ride)); if(HF.ride){ if(MG.state!=='F') mgSet('F'); HF.ry=0.35; HF.rp=0.12; const H=window.__hist; if(H){ H.U=0; H.playing=true; } } };
     row.insertBefore(m,g.nextSibling); m.querySelector('[data-mg="S"]').onclick=()=>{ if(!HF.on) g.querySelector('[data-v="1"]').click(); if(HF.ride){ HF.ride=false; rb.setAttribute('aria-pressed','false'); } const on=MG.state!=='S';
       if(!on&&MG.emb){ MG.leave=true; MG.edT=MG.ed0; MG.tgT=[0,0,0]; window.__obsuEmbed.set({cone:false}); MG.lc.setAttribute('aria-pressed','false'); return; } mgSet(on?'S':'F'); }; MG.ui=m; MG.go=null;
@@ -14242,7 +14295,7 @@ function hfBuild(root){ const save=MODE; MODE='hist';
     const V=window.__obsuEmbed?window.__obsuEmbed.views():[]; const go=v=>{ if(!v) return; if(window.__obsuEmbed.cone){ window.__obsuEmbed.set({cone:false}); MG.lc.setAttribute('aria-pressed','false'); } MG.tgT=v.t.slice(); MG.edT=v.d; HF.pitch=v.p; if(v.y!=null) HF.yaw=v.y; };
     V.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.setAttribute('role','menuitem'); b.textContent=v.name; b.onclick=()=>{ shut(); go(v); }; menu.appendChild(b); });
     /* one row of four exclusive views: Funnel · Ride inside · Observable universe · Close-up; the light-cone extras follow only inside the universe */
-    { const fB=g.querySelector('[data-v="1"]'), cB=g.querySelector('[data-v="0"]'), sB=m.querySelector('[data-mg="S"]'); fB.textContent='Funnel'; sB.textContent='Observable universe'; g.setAttribute('role','group'); g.setAttribute('aria-label','View');
+    { const fB=g.querySelector('[data-v="1"]'), cB=g.querySelector('[data-v="0"]'), sB=m.querySelector('[data-mg="S"]'); fB.textContent='Expansion history'; sB.textContent='Observable Universe'; g.setAttribute('role','group'); g.setAttribute('aria-label','View');
       g.insertBefore(rb,cB); g.insertBefore(sB,cB);
       const sync=()=>{ const md=!HF.on?'c':HF.ride?'r':(MG.state==='S'||MG.emb)?'s':'f'; [[fB,'f'],[rb,'r'],[sB,'s'],[cB,'c']].forEach(([b,k])=>b.setAttribute('aria-pressed',String(md===k))); m.style.display=(MG.emb&&HF.on)?'':'none'; };
       const of=fB.onclick, oc=cB.onclick; fB.onclick=()=>{ of(); if(HF.ride) HF.ride=false; if(MG.state==='S'||MG.emb) sB.onclick(); sync(); }; cB.onclick=()=>{ HF.ride=false; oc(); sync(); };
@@ -16464,8 +16517,13 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
  #sbkCard .st2-list button small{font-size:10.5px}
  #plan section{padding:9px 12px;border-radius:12px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
  #plBar{right:312px!important}
- #plBar .plGrp{max-width:calc(100vw - 336px)!important}
+ #plToast{bottom:auto!important;top:calc(env(safe-area-inset-top,0px) + 112px)!important;left:calc((100% - 312px)/2)!important}   /* notices under the title, clear of the bar */
+ #plBar .plGrp{max-width:calc(100vw - 336px)!important;flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:thin}
+ #plBar .plGrp>*{flex:none}
+ #plBar .plGrp button,#plBar .plDDb{padding:6px 10px!important;font-size:12.5px!important}
+ #plBar .plSep{margin:0 3px}
  #plSide{left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:230px}
+ #plSide > section{position:static!important;left:auto!important;right:auto!important;top:auto!important;width:auto!important;max-height:none!important;overflow:visible!important;background:none!important;border:0!important;border-top:1px solid rgba(236,230,218,.14)!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:12px 0 0!important;margin:12px 0 0!important}
  #plSide,#plUp,#plLay,#plCyc,#plWh,#plGM,#plPol,#plSEM,#plEcl,#plWd{left:auto!important;right:12px!important;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))!important;max-height:calc(100% - 132px)}
  #plSel{right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))}
  #plSel h2{font-size:17px}
@@ -16480,9 +16538,43 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
  #plan button{padding:6px 9px;font-size:12px}
 }
 .plDD{display:inline-flex;flex:none}
+.plSep{flex:none;align-self:center;width:1px;height:20px;margin:0 6px;background:rgba(236,230,218,.22)}
 .plDDm{position:fixed;z-index:60;display:flex;flex-direction:column;gap:4px;padding:6px;background:rgba(12,13,16,.94);border:1px solid rgba(236,230,218,.18);border-radius:14px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.45);pointer-events:auto}
 .plDDm[hidden]{display:none}
 .plDDm button{text-align:left;justify-content:flex-start;white-space:nowrap;width:100%}
+
+.dcH{cursor:pointer;position:relative;user-select:none}
+.dcH::before{content:'▾';display:inline-block;width:12px;margin-left:-2px;opacity:.55;transition:transform .15s}
+.dcH.dcC::before{transform:rotate(-90deg)}
+.dcHide{display:none!important}
+.dcI{all:unset;cursor:pointer;margin-left:6px;font-size:11px;opacity:.6;letter-spacing:0;text-transform:none}
+.dcI:hover,.dcI[aria-expanded=true]{opacity:1;color:#ffd28a}
+p.dcNote:not(.dcShow),div p.dcNote:not(.dcShow){display:none!important}
+#plSide > section{border-top:0!important;margin-top:4px!important;padding-top:4px!important}
+#plSide > section > h2:first-of-type{display:none}
+#plSide .plTabs{display:flex;gap:2px;margin:-2px -4px 10px;padding:3px;border-radius:10px;background:rgba(236,230,218,.06)}
+#plSide .plTabs button{all:unset;flex:1;text-align:center;cursor:pointer;padding:6px 4px;border-radius:8px;font:500 12px/1.2 var(--sans,system-ui);color:rgba(236,230,218,.7);white-space:nowrap}
+#plSide .plTabs button:hover{color:#ece6da;background:rgba(236,230,218,.06)}
+#plSide .plTabs button[aria-selected=true]{background:rgba(236,230,218,.16);color:#fff}
+#plSide.tabC .plTabs{margin-bottom:-2px}
+p.dcNote.dcShow{display:block!important;-webkit-line-clamp:unset!important}
+.dcLim p{display:none!important}
+.sk-ro.dcLim > :nth-child(n+7){display:none!important}
+ #plSide .plBtns button[data-step="600"], #plSide .plBtns button[data-step="-600"]{display:none!important}
+.dcLim > dt:nth-of-type(n+6), .dcLim > dd:nth-of-type(n+6), .dcLim dl > dt:nth-of-type(n+6), .dcLim dl > dd:nth-of-type(n+6), .dcLim tr:nth-of-type(n+7){display:none!important}
+.dcMore{all:unset;cursor:pointer;display:block;margin:2px 0 6px;font:500 11.5px/1.4 var(--sans,system-ui);color:#ffd28a;opacity:.85}
+.dcMore:hover{opacity:1;text-decoration:underline}
+@media (min-width:721px){
+ #plan .plChk.dcChip{display:inline-flex!important;align-items:center;gap:6px;margin:3px 4px 3px 0;padding:4px 10px 4px 7px!important;border:1px solid rgba(236,230,218,.18)!important;border-radius:999px;font-size:12px!important;line-height:1.2!important;vertical-align:top}
+ #plan .plChk.dcChip:has(input:checked){background:rgba(236,230,218,.14);border-color:rgba(236,230,218,.4)!important}
+ #plan .plChk.dcChip input{width:13px;height:13px;margin:0}
+ #plan .plChk.dcChip small{display:none!important}
+ #plSide .plLL{align-items:flex-end}
+ #plSide #plGeo{padding:5px 9px!important;font-size:11.5px!important}
+ #plSide .plBtns button[data-step]{padding:4px 8px!important;font-size:11.5px!important}
+ #plSide .plBtns{gap:4px!important}
+ #plSide .plTz{margin:4px 0!important;font-size:11px!important}
+}
 .clp{display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .clp:hover{color:#f1e9da!important}
 #sbkCard .lede.clp{-webkit-line-clamp:3}
@@ -16493,31 +16585,81 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
  function scan(){ if(innerWidth<721) return; document.querySelectorAll(sel).forEach(p=>{ if(p.closest('dl,label,button,a,[role=button],.sk-ro,.sk-tbl,.im-tile,.im-big,.im-grid')||p.querySelector('input,select,button,canvas,svg')||[...p.children].some(c=>!INL.test(c.tagName))) { if(p.tagName==='P') p.classList.add('clpN'); return; } const n=(p.textContent||'').length; if(n<150) return; p.classList.add('clpN','clp'); p.title='Click to read all'; });
   document.querySelectorAll('#plan .plChk small:not([data-t])').forEach(sm=>{ sm.dataset.t=1; const l=sm.closest('label'); if(l&&!l.title) l.title=sm.textContent; }); }
  document.addEventListener('click',e=>{ const p=e.target.closest&&e.target.closest('.clpN'); if(!p||e.target.closest('a,button,input')) return; if(p.classList.contains('clp')){ p.classList.remove('clp'); p.title='Click to fold'; } else if((p.textContent||'').length>=150){ p.classList.add('clp'); p.title='Click to read all'; } },true);
- setInterval(scan,600); })();
+ setInterval(()=>{ if(!document.hidden) scan(); },700); })();
+/* ---- declutter, one rule for every sandbox card and every planetarium panel:
+   1. explanatory notes go behind an ⓘ on their heading (click to read);
+   2. every heading folds its section (click it);
+   3. long readouts (dl, tables) show their first rows, with "All n ▾" to open;
+   4. planetarium checkboxes become compact toggle chips, their notes in tooltips. */
+(function(){ const CARDS='#sbkCardIn, #plan section';
+ function heads(box){ return [...box.querySelectorAll(':scope > h2, :scope > h3, :scope > div > h3')].filter(h=>!h.closest('dl')); }
+ function sectionOf(h){ const out=[]; let e=h.nextElementSibling; while(e&&!/^H[23]$/.test(e.tagName)&&!(e.tagName==='SECTION')){ out.push(e); e=e.nextElementSibling; } return out; }
+ function noteP(p){ if(p.tagName!=='P'||p.classList.contains('lede')||p.querySelector('input,select,button,canvas,output,b[id],span[id]')||p.id) return false; const t=(p.textContent||'').trim(); return t.length>60&&!/^\d/.test(t); }
+ function prep(box){ if(innerWidth<721) return;
+  heads(box).forEach((h,hi)=>{ if(h.dataset.dc) return; h.dataset.dc=1; const fold=h.tagName==='H3'; if(fold) h.classList.add('dcH');   /* titles (h2) are not folded; sub-sections (h3) are */
+    const body=sectionOf(h), notes=body.filter(e=>e.matches&&(e.matches('p.plNote')||(box.closest('#plan')&&noteP(e))));
+    if(notes.length){ const i=document.createElement('button'); i.type='button'; i.className='dcI'; i.textContent='ⓘ'; i.title='About this'; i.setAttribute('aria-expanded','false'); notes.forEach(n=>n.classList.add('dcNote'));
+      i.addEventListener('click',e=>{ e.stopPropagation(); const on=i.getAttribute('aria-expanded')!=='true'; i.setAttribute('aria-expanded',String(on)); notes.forEach(n=>n.classList.toggle('dcShow',on)); }); h.appendChild(i); }
+    if(fold&&body.length) h.addEventListener('click',e=>{ if(e.target.closest('button,input,select,a')) return; const c=!h.classList.contains('dcC'); h.classList.toggle('dcC',c); sectionOf(h).forEach(x=>x.classList.toggle('dcHide',c)); }); });
+  /* the first paragraph of a planetarium panel that has no heading of its own */
+  if(box.matches('#plan section')){ const p=box.querySelector(':scope > p'); const h=box.querySelector(':scope > h2'); if(p&&h&&!p.dataset.dc&&noteP(p)&&!p.classList.contains('dcNote')){ p.dataset.dc=1; p.classList.add('dcNote'); if(!h.querySelector('.dcI')){ const i=document.createElement('button'); i.type='button'; i.className='dcI'; i.textContent='ⓘ'; i.title='About this'; i.addEventListener('click',e=>{ e.stopPropagation(); p.classList.toggle('dcShow'); }); h.appendChild(i); } } }
+  /* long readouts */
+  box.querySelectorAll('dl, .sk-tbl, .sk-ro, #plWhInfo, #plEcInfo, #plWdInfo').forEach(d=>{ if(d.dataset.dcl||d.closest('[data-dcl]')&&d.closest('[data-dcl]')!==d) return; const cnt=()=>d.matches('dl')?d.querySelectorAll(':scope > dt').length:d.matches('.sk-ro')?d.children.length:Math.max(d.querySelectorAll('dt, tr').length,d.querySelectorAll('p').length?6:0); const n=cnt(); if(n<(d.matches('.sk-ro')?8:6)) return;
+    d.dataset.dcl=1; d.classList.add('dcLim'); const b=document.createElement('button'); b.type='button'; b.className='dcMore'; const lab=()=>{ b.textContent=d.classList.contains('dcLim')?'Show all ▾':'Show fewer ▴'; };
+    b.addEventListener('click',()=>{ d.classList.toggle('dcLim'); lab(); }); d.after(b); lab(); setInterval(()=>{ if(b.isConnected) lab(); },1500); }); }
+ function scanDC(){ document.querySelectorAll(CARDS).forEach(prep); document.querySelectorAll('#plan .plChk').forEach(l=>{ if(l.dataset.dc) return; l.dataset.dc=1; const sm=l.querySelector('small'); if(sm&&!l.title) l.title=sm.textContent; l.classList.add('dcChip'); }); }
+ setInterval(()=>{ if(!document.hidden) scanDC(); },700); })();
 /* planetarium bar: the sky controls show only where they act; the modes are grouped into two menus */
 (function(){ const pr=id=>{ const b=document.getElementById(id); return !!b&&b.getAttribute('aria-pressed')==='true'; };
- const GR=[{k:'cyc',label:'Sky cycles',ids:['plCycBtn','plPolBtn','plEclBtn']},{k:'views',label:'From space',ids:['plSemBtn','plWdBtn']}];
+ const GR=[{k:'cyc',label:'Celestial Cycles',short:'Cycles',ids:['plCycBtn','plPolBtn','plEclBtn']},{k:'views',label:'Views from Space',short:'From Space',ids:['plSemBtn','plWdBtn']}];
  let built=false, open=null;
  function close(){ if(open){ open.m.hidden=true; open.b.setAttribute('aria-expanded','false'); open=null; } }
  function build(){ const bar=document.getElementById('plBar'); if(!bar) return; const row=document.getElementById('plSideBtn'); if(!row) return; const grp=row.parentElement;
   const after=document.getElementById('plLayBtn');
   let anchor=after;
   GR.forEach(G=>{ const w=document.createElement('span'); w.className='plDD'; const b=document.createElement('button'); b.type='button'; b.className='plDDb'; b.setAttribute('aria-haspopup','true'); b.setAttribute('aria-expanded','false'); b.innerHTML='<span>'+G.label+'</span> ▾'; const m=document.createElement('div'); m.className='plDDm'; m.hidden=true; m.setAttribute('role','menu');
-    G.ids.forEach(id=>{ const el=id==='AR'?[...grp.querySelectorAll('button')].find(x=>x.textContent.trim()==='AR'):document.getElementById(id); if(el){ m.appendChild(el); el.addEventListener('click',()=>setTimeout(close,0)); } });
+    G.ids.forEach(id=>{ const el=id==='AR'?[...grp.querySelectorAll('button')].find(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim())):document.getElementById(id); if(el){ m.appendChild(el); el.addEventListener('click',()=>setTimeout(close,0)); } });
     b.onclick=e=>{ e.stopPropagation(); if(open&&open.b===b){ close(); return; } close(); const r=b.getBoundingClientRect(); m.hidden=false; m.style.left=Math.max(8,Math.min(innerWidth-m.offsetWidth-8,r.left))+'px'; m.style.bottom=(innerHeight-r.top+8)+'px'; b.setAttribute('aria-expanded','true'); open={b,m}; };
     w.append(b); document.getElementById('plan').appendChild(m); anchor.after(w); anchor=w; G.b=b; G.m=m; });
   document.addEventListener('pointerdown',e=>{ if(open&&!open.m.contains(e.target)&&!open.b.contains(e.target)) close(); },true);
   window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&open){ close(); e.stopImmediatePropagation(); } },true);
+  /* order: your sky (place, tonight, layers) | the experiences | the planetarium menu and exit */
+  { const q=id=>document.getElementById(id), ar=[...grp.querySelectorAll('button')].find(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim())), dd=[...grp.querySelectorAll('.plDD')];
+    const sep=()=>{ const e=document.createElement('span'); e.className='plSep'; e.setAttribute('aria-hidden','true'); return e; };
+    const rest=[...grp.children].filter(c=>![q('plSideBtn'),q('plUpBtn'),q('plWhBtn'),q('plLayBtn'),dd[0],dd[1],q('plGMBtn'),q('pl3dBtn'),q('plAsMoon'),ar].includes(c));
+    /* Planetary Scale: a menu of the planets (and Off), instead of a button that cycles */
+    let sdd=null; { const am=q('plAsMoon'), O=window.__asMoonOrder||['Off']; if(am){ sdd=document.createElement('span'); sdd.className='plDD'; const sb=document.createElement('button'); sb.type='button'; sb.className='plDDb'; sb.id='plScaleDD'; sb.innerHTML='<span>Planetary Scale</span> ▾'; sb.title='Put a planet where the Moon is, at the Moon’s distance';
+      const sm=document.createElement('div'); sm.className='plDDm'; sm.hidden=true; sm.setAttribute('role','menu');
+      O.forEach(nm=>{ const it=document.createElement('button'); it.type='button'; it.textContent=nm==='Off'?'Off (the real Moon)':nm; it.dataset.pl=nm; it.addEventListener('click',()=>{ am.dataset.target=nm; am.click(); setTimeout(close,0); }); sm.appendChild(it); });
+      sb.onclick=e=>{ e.stopPropagation(); if(open&&open.b===sb){ close(); return; } close(); const r=sb.getBoundingClientRect(); sm.hidden=false; sm.style.left=Math.max(8,Math.min(innerWidth-sm.offsetWidth-8,r.left))+'px'; sm.style.bottom=(innerHeight-r.top+8)+'px'; sb.setAttribute('aria-expanded','true'); open={b:sb,m:sm}; };
+      sdd.append(sb); document.getElementById('plan').appendChild(sm); am.style.display='none';
+      window.__scaleSync=()=>{ const cur=am.getAttribute('aria-pressed')==='true'?(am.textContent.split('·')[1]||'').trim():'Off'; sm.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.pl===cur))); sb.setAttribute('aria-pressed',String(cur!=='Off')); const t=cur!=='Off'?cur+' as the Moon':(sync.short?'Scale':'Planetary Scale'); if(sb.firstChild.textContent!==t) sb.firstChild.textContent=t; }; } }
+    [q('plSideBtn'),q('plUpBtn'),q('plLayBtn'),q('plWhBtn'),sep(),dd[0],dd[1],q('plGMBtn'),q('pl3dBtn'),sdd,q('plAsMoon'),ar,sep()].concat(rest.filter(c=>!c.classList.contains('plSep'))).forEach(c=>{ if(c) grp.appendChild(c); }); }
   built=true; }
- function sync(){ requestAnimationFrame(sync); const pl=document.getElementById('plan'); if(!pl||pl.hidden) return; if(!built){ if([...document.querySelectorAll('#plBar button')].some(x=>x.textContent.trim()==='AR')||performance.now()>8000) build(); if(!built) return; }
-  GR.forEach(G=>{ const act=[...G.m.querySelectorAll('button')].find(x=>x.getAttribute('aria-pressed')==='true'); const t=act?act.textContent.trim():G.label; const sp=G.b.firstChild; if(sp.textContent!==t) sp.textContent=t; G.b.setAttribute('aria-pressed',String(!!act)); });
+ const NM={'Place · time · find':'Sky Today','Location & Time':'Sky Today','Tonight':'Tonight’s Sky','Layers':'Display','Sky cycles':'Celestial Cycles','From space':'Views from Space','Galactic map':'Galactic Map','Planet as Moon':'Planetary Scale','AR':'Augmented Reality',
+  'Full cycle':'Full Cycle','Pole stars':'Precession of the Pole','Eclipses':'Eclipses','Sun · Earth · Moon':'Sun–Earth–Moon System','Moon · Mars':'Earth from the Moon and Mars',
+  'See through ground':'Transparent Ground','Southern sky':'Southern Hemisphere','Northern sky':'Northern Hemisphere','All-sky':'All-Sky Projection','Reverse':'Reverse Time','Play':'Play','Pause':'Pause'};
+ const SHN={'Augmented Reality':'AR','Tonight’s Sky':'Tonight','Sky Today':'Today','Views from Space':'From Space','Celestial Cycles':'Cycles','Planetary Scale':'Scale','Galactic Map':'Galaxy'}, SHV=new Set(Object.values(SHN));
+ let skyHook=false;
+ function hookSky(){ if(skyHook) return; skyHook=true; const ar=[...document.querySelectorAll('#plBar button')].find(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim()));
+  [document.getElementById('pl3dBtn'),document.getElementById('plAsMoon'),ar].forEach(b=>{ if(b) b.addEventListener('click',()=>{ ['plGMBtn','plEclBtn','plWdBtn','plSemBtn','plCycBtn','plPolBtn'].forEach(id=>{ const t=document.getElementById(id); if(t&&t.getAttribute('aria-pressed')==='true') t.click(); }); },true); });
+  ['plGMBtn','plEclBtn','plWdBtn','plSemBtn'].forEach(id=>{ const t=document.getElementById(id); if(t) t.addEventListener('click',()=>{ if(t.getAttribute('aria-pressed')==='true') return; const a=document.getElementById('plAsMoon'); let n=0; while(a&&a.getAttribute('aria-pressed')==='true'&&n++<9) a.click(); },true); }); }   /* full-screen views end the planet comparison */
+ function sync(){ const pl=document.getElementById('plan'); if(!pl||pl.hidden){ setTimeout(sync,500); return; } setTimeout(sync,90);   /* ~11 Hz while the planetarium is open, idle otherwise */ if(built) hookSky();
+  if(window.__scaleSync) window.__scaleSync();
+  { const a=document.getElementById('plAsMoon'); if(a&&sync.short){ const t=a.textContent; if(t.startsWith('Planetary Scale · ')) a.textContent='Scale · '+t.slice(18); else if(t==='Planetary Scale') a.textContent='Scale'; } }
+  sync.k=(sync.k||0)+1; if(built&&sync.k%4===0){ const g=document.getElementById('plSideBtn').parentElement;
+    /* try the full names first; shorten only as many as the row needs (same tick, so nothing flickers) */
+    if(sync.short){ const FULL=Object.fromEntries(Object.entries(SHN).map(([k,v])=>[v,k])); for(const b of g.querySelectorAll('button, .plDDb>span')){ const t=b.textContent.trim(); if(FULL[t]) b.textContent=FULL[t]; else if(t.startsWith('Scale · ')) b.textContent='Planetary Scale · '+t.slice(8); } sync.short=false; }
+    if(g.scrollWidth>g.clientWidth+2){ for(const b of g.querySelectorAll('button, .plDDb>span')){ const t=b.textContent.trim(); if(SHN[t]||t.startsWith('Planetary Scale · ')){ sync.short=true; b.textContent=SHN[t]||('Scale · '+t.slice(18)); } } } }   /* all short or all full: no mixed row */
+  if(true){ document.querySelectorAll('#plBar button, .plDDm button, .plDDb>span').forEach(b=>{ if(b.children.length&&b.tagName==='BUTTON') return; const t=b.textContent.trim(), r=NM[t]; if(r&&r!==t&&!(sync.short&&SHV.has(t))){ b.textContent=r; if(b.tagName==='BUTTON') b.dataset.nm=t; } }); } if(!built){ if([...document.querySelectorAll('#plBar button')].some(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim()))||performance.now()>8000) build(); if(!built) return; }
+  GR.forEach(G=>{ const act=[...G.m.querySelectorAll('button')].find(x=>x.getAttribute('aria-pressed')==='true'); const t=sync.short?G.short:(act?act.textContent.trim():G.label); const sp=G.b.firstChild; if(sp.textContent!==t) sp.textContent=t; G.b.setAttribute('aria-pressed',String(!!act)); });
   const takeover=pr('plGMBtn')||pr('plEclBtn')||pr('plWdBtn')||pr('plSemBtn'), own=pr('plCycBtn')||pr('plPolBtn');
   const bar=document.getElementById('plBar'), tg=bar&&bar.querySelector('[aria-label="Time"]'), vg=bar&&bar.querySelector('[aria-label="View"]');
   if(tg){ const d=(takeover||own)?'none':''; if(tg.style.display!==d) tg.style.display=d; } if(vg){ const d=takeover?'none':''; if(vg.style.display!==d) vg.style.display=d; } }
- requestAnimationFrame(sync); })();
+ setTimeout(sync,300); })();
 /* planetarium, wide screens: one right-hand column; the object card on top, the open tool panel under it, sharing the height */
-(function(){ const IDS=['plSide','plUp','plLay','plCyc','plWh','plGM','plPol','plSEM','plEcl','plWd'];
- function lay(){ requestAnimationFrame(lay); const pl=document.getElementById('plan'); if(!pl||pl.hidden) return; const wide=innerWidth>=721, sel=document.getElementById('plSel');
+(function(){ const IDS=['plSide','plCyc','plGM','plPol','plSEM','plEcl','plWd'];
+ function lay(){ const pl=document.getElementById('plan'); if(!pl||pl.hidden){ setTimeout(lay,500); return; } setTimeout(lay,70); const wide=innerWidth>=721, sel=document.getElementById('plSel');
   const H=pl.clientHeight, top0=12, selOn=sel&&!sel.hidden&&sel.offsetParent!==null;
   const open=IDS.map(i=>document.getElementById(i)).filter(e=>e&&!e.hidden&&e.offsetParent!==null&&getComputedStyle(e).display!=='none');
   if(!wide){ open.forEach(e=>{ e.style.top=''; e.style.maxHeight=''; }); if(sel) sel.style.maxHeight=''; return; }
@@ -16528,7 +16670,7 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
     const f=window.__plFree; if(!f||Math.abs(f.r-r)>1||Math.abs(f.b-b)>1){ window.__plFree={r,b}; try{ window.dispatchEvent(new Event('resize')); }catch(e){} } const hd=document.getElementById('plHead'); if(hd) hd.style.left=(r/2)+'px'; }
   if(selOn){ const share=open.length?Math.max(170,(bottom-top0)*0.42):bottom-top0; sel.style.maxHeight=share+'px'; y=top0+sel.offsetHeight+8; }
   open.forEach((e,k)=>{ const room=Math.max(140,(bottom-y)/(open.length-k)-(k<open.length-1?8:0)); e.style.top=y+'px'; e.style.maxHeight=room+'px'; y+=Math.min(e.offsetHeight,room)+8; }); }
- requestAnimationFrame(lay); })();
+ setTimeout(lay,300); })();
 </script>
 <script>
 (function(){ const S=window.__SBK; if(!S) return; const $=id=>document.getElementById(id);
