@@ -6839,6 +6839,11 @@ root.innerHTML=`<canvas id="plCv" aria-label="Planetarium. Drag to look around, 
  <canvas id="plEcCv" width="560" height="150"></canvas>
  <div class="plBtns"><button type="button" id="plEcHere">From my place</button><button type="button" id="plEcBest">From the best place</button><button type="button" id="plEcSky">See it in the sky</button></div>
 </section>
+<section id="plCS" hidden aria-label="The celestial sphere"><button class="plX" data-x="plCS" aria-label="Close">×</button><h2>The celestial sphere</h2>
+ <p>Every star and constellation on one sphere round the Earth. The Earth turns inside it once a sidereal day (23 h 56 min); its spin axis meets the sphere at the celestial poles, Polaris 0.7° from the north one. The green plane is your horizon: everything above it is in your sky now.</p>
+ <label class="plChk"><input type="checkbox" data-cs="ln"> <span>Constellation figures</span></label><label class="plChk"><input type="checkbox" data-cs="nm"> <span>Names</span></label><label class="plChk"><input type="checkbox" data-cs="tr"> <span>Star trails</span></label><label class="plChk"><input type="checkbox" data-cs="eq"> <span>Equator and ecliptic</span></label><label class="plChk"><input type="checkbox" data-cs="hz"> <span>Your horizon</span></label><label class="plChk"><input type="checkbox" data-cs="auto" id="plCSauto"> <span>Slow spin</span></label>
+ <div class="plBtns"><button type="button" id="plCSPlay">▶ Turn the Earth</button><button type="button" id="plCSN">From above the pole</button><button type="button" id="plCSSide">Side on</button><button type="button" id="plCSDef">Reset</button></div>
+</section>
 <section id="plWd" hidden aria-label="Stand on another world"><button class="plX" data-x="plWd" aria-label="Close">×</button><h2>Stand on another world</h2>
  <p>The Earth in the sky of the Moon and of Mars, at this moment. From the Moon it hangs almost still, wobbling by the librations, and goes through phases; from Mars it is a blue evening or morning star.</p>
  <div class="plBtns" id="plWdW"><button type="button" data-w="moon" aria-pressed="true">The Moon</button><button type="button" data-w="mars" aria-pressed="false">Mars</button></div>
@@ -6894,7 +6899,7 @@ root.innerHTML=`<canvas id="plCv" aria-label="Planetarium. Drag to look around, 
 <footer id="plBar">
  <div class="plGrp" role="group" aria-label="Time"><button type="button" id="plPlay" class="pri">Play</button><select id="plRate" aria-label="Speed"><option value="1">Real time</option><option value="60" selected>1 min / s</option><option value="600">10 min / s</option><option value="3600">1 hour / s</option><option value="86164.0905">1 sidereal day / s</option><option value="86400">1 day / s</option></select><button type="button" id="plRev" aria-pressed="false" title="Run time backwards">Reverse</button></div>
  <div class="plGrp" role="group" aria-label="View"><button type="button" data-look="0">N</button><button type="button" data-look="90">E</button><button type="button" data-look="180">S</button><button type="button" data-look="270">W</button><button type="button" id="plGnd" aria-pressed="false" title="Hide the ground and see the sky below your horizon, including the far southern (or northern) sky">See through ground</button><button type="button" id="plHemi" title="Jump between a northern and a southern place to see the other hemisphere’s sky">Southern sky</button><button type="button" id="plDome" aria-pressed="false" title="Whole sky, zenith in the centre, north up">All-sky</button></div>
- <div class="plGrp"><button type="button" id="plSideBtn" aria-expanded="true">Place &amp; time</button><button type="button" id="plUpBtn" aria-expanded="false">Tonight</button><button type="button" id="plWhBtn" aria-expanded="false" title="Search for an object, and see where and when it can be seen from here">Find</button><button type="button" id="plLayBtn" aria-expanded="false">Layers</button><button type="button" id="plCycBtn" aria-pressed="false" title="Trace one full cycle of the Sun, Moon, planets and stars">Full cycle</button><button type="button" id="plPolBtn" aria-pressed="false" title="Earth’s axis wobbles once every 25 800 years: see which star is the pole star in any year">Pole stars</button><button type="button" id="plSemBtn" aria-pressed="false" title="The Sun, the Earth and the Moon from outside, at this moment: day and night, seasons, sunlight, tides and eclipses">Sun · Earth · Moon</button><button type="button" id="plEclBtn" aria-pressed="false" title="Solar and lunar eclipses, as seen from your place or from the best place on Earth">Eclipses</button><button type="button" id="plWdBtn" aria-pressed="false" title="Stand on the Moon or on Mars and see the Earth in their sky, at this moment">Moon · Mars</button><button type="button" id="pl3dBtn" title="The constellation in the middle of your view (or the one you selected), with its stars at their real distances">3D</button><button type="button" id="plGMBtn" aria-pressed="false" title="The whole sky in galactic coordinates, with popular objects">Galactic map</button><button type="button" id="plAsMoon" aria-pressed="false" title="Put a planet where the Moon is and see how large it would look from the ground">Planet as Moon</button><button type="button" id="plExit">Exit</button></div>
+ <div class="plGrp"><button type="button" id="plSideBtn" aria-expanded="true">Place &amp; time</button><button type="button" id="plUpBtn" aria-expanded="false">Tonight</button><button type="button" id="plWhBtn" aria-expanded="false" title="Search for an object, and see where and when it can be seen from here">Find</button><button type="button" id="plLayBtn" aria-expanded="false">Layers</button><button type="button" id="plCycBtn" aria-pressed="false" title="Trace one full cycle of the Sun, Moon, planets and stars">Full cycle</button><button type="button" id="plPolBtn" aria-pressed="false" title="Earth’s axis wobbles once every 25 800 years: see which star is the pole star in any year">Pole stars</button><button type="button" id="plSemBtn" aria-pressed="false" title="The Sun, the Earth and the Moon from outside, at this moment: day and night, seasons, sunlight, tides and eclipses">Sun · Earth · Moon</button><button type="button" id="plEclBtn" aria-pressed="false" title="Solar and lunar eclipses, as seen from your place or from the best place on Earth">Eclipses</button><button type="button" id="plCSBtn" aria-pressed="false" title="The whole sky as a sphere round the Earth: where every constellation sits in 3D">Celestial Sphere</button><button type="button" id="plWdBtn" aria-pressed="false" title="Stand on the Moon or on Mars and see the Earth in their sky, at this moment">Moon · Mars</button><button type="button" id="pl3dBtn" title="The constellation in the middle of your view (or the one you selected), with its stars at their real distances">3D</button><button type="button" id="plGMBtn" aria-pressed="false" title="The whole sky in galactic coordinates, with popular objects">Galactic map</button><button type="button" id="plAsMoon" aria-pressed="false" title="Put a planet where the Moon is and see how large it would look from the ground">Planet as Moon</button><button type="button" id="plExit">Exit</button></div>
 </footer>
 <div id="plToast" role="status"></div>`;
 document.body.appendChild(root);
@@ -7144,7 +7149,7 @@ function tajDraw(B){ if(!S.L.gnd||!tajNear()) return; const P=tajModel(), P3=[0,
     g.globalAlpha=0.18; g.strokeStyle='rgba(255,255,255,.5)'; g.lineWidth=1; for(let k=0;k<26;k++){ const d=20+k*k*0.62, q=pj(-200,-d,-2), q2=pj(200,-d,-2); if(q&&q2){ g.beginPath(); g.moveTo(q[0],q[1]); g.lineTo(q2[0],q2[1]); g.stroke(); } } }
   g.restore();
   g.save(); g.fillStyle='rgb('+sc.join(',')+')'; for(const o of P){ if(path(o.pts,o.y,false)) g.fill(); } g.restore(); }
-function draw(){ if(WD&&WD.on){ wdDraw(); return; } if(EC&&EC.on){ ecDraw(); return; } if(GM.on){ gmDraw(); return; } if(!ST) sky(); setView(); PICK=[];
+function draw(){ if(CSV&&CSV.on){ csDraw(); return; } if(WD&&WD.on){ wdDraw(); return; } if(EC&&EC.on){ ecDraw(); return; } if(GM.on){ gmDraw(); return; } if(!ST) sky(); setView(); PICK=[];
   g.setTransform(DPR,0,0,DPR,0,0);
   const B=background(), ml=mlim(), ext=S.L.atm?0.2:0, P3=[0,0,0]; DAY=B.day; root.classList.toggle('day',B.day>0.6);
   
@@ -8060,12 +8065,13 @@ function frame(now){ raf=0;
   if(PCY.run){ const t=now/1000; if(PCY.tl) PCY.p+=Math.min(0.1,(t-PCY.tl)/PCY.dur); PCY.tl=t; if(PCY.p>=1) PCY.p-=1; dirty=true; }
   if(PP.run){ const t=now/1000; if(PP.tl){ let Y=ppYear(S.jd)+Math.min(0.1,t-PP.tl)*1600; if(Y>16000) Y=-12000; S.jd=ppJd(Y); ppInfo(); } PP.tl=t; dirty=true; }
   if(S.playing){ const dt=Math.min(0.25,(now-(tPrev||now))/1000); tPrev=now; S.jd+=S.dir*S.rate*dt/86400; dirty=true; }
+  if(CSV&&CSV.on&&(CSV.auto||CSV.play)){ const t=now/1000; if(CSV.tl){ const d=Math.min(0.1,t-CSV.tl); if(CSV.auto&&!CSV.drag) CSV.yaw+=d*0.08; if(CSV.play) S.jd+=d*1200/86400; } CSV.tl=t; dirty=true; }
   if(WD&&WD.on&&WD.play){ const t=now/1000; if(WD.tl) WD.jd+=Math.min(0.1,t-WD.tl)*WD.rate/86400; WD.tl=t; dirty=true; }
   if(EC&&EC.on&&EC.play){ const t=now/1000, L=ecLocal(); if(EC.tl&&L){ const q=EC.ev.kind==='sol'?ecSol(EC.t,S.lat,S.lon):null, slow=q&&q.Rm>q.Rs&&q.d-(q.Rm-q.Rs)<0.05*q.Rs?0.12:1; EC.t+=Math.min(0.1,t-EC.tl)*EC.spd*slow/86400; if(EC.t>=L.t1){ EC.t=L.t1; EC.play=false; } ecTimeUI(); } EC.tl=t; dirty=true; }
   if(SEM.run){ const t=now/1000; if(SEM.tl) S.jd+=Math.min(0.1,t-SEM.tl)*SEM.rate; SEM.tl=t; dirty=true; }
   if(dirty){ dirty=false; sky(); if(S.track&&S.sel){ const hh=apparent(selH()); S.az=(Math.atan2(hh[0],hh[1])*R2D+360)%360; if(!S.dome) S.alt=clamp(Math.asin(hh[2])*R2D,-89,89); }
     if(!SEM.on) draw(); else { try{ semDraw(); }catch(e){ console.error(e); } } if(S.sel&&now-infoT>400){ infoT=now; info(); } try{ c3eName(); }catch(e){} }
-  if(S.playing||dirty||PCY.run||PP.run||SEM.run||(EC&&EC.on&&EC.play)||(WD&&WD.on&&WD.play)) raf=requestAnimationFrame(frame); }
+  if(S.playing||dirty||PCY.run||PP.run||SEM.run||(EC&&EC.on&&EC.play)||(WD&&WD.on&&WD.play)||(CSV&&CSV.on&&(CSV.auto||CSV.play))) raf=requestAnimationFrame(frame); }
 function kick(){ dirty=true; if(!raf&&!root.hidden) raf=requestAnimationFrame(frame); }
 /* ---------------------------------------------------------------- input */
 function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
@@ -8094,7 +8100,7 @@ function centre(){ if(!S.sel) return; const hh=apparent(selH()); S.az=(Math.atan
   if(S.alt<-1&&S.L.gnd) toast(($('plSelT').textContent||'It')+' is below the horizon now. Turn off the ground in Layers to see through it.'); if(S.fov>90) S.fov=60; kick(); }
 function toast(t){ const el=$('plToast'); el.textContent=t; el.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('on'),3600); }
 window.addEventListener('keydown',e=>{ if(root.hidden||/INPUT|SELECT|TEXTAREA/.test(document.activeElement&&document.activeElement.tagName)) return;
-  const k=e.key; if(k==='Escape'){ /* one step back at a time: an open panel, then the selection, then the planetarium */ const op=['plCyc','plPol','plGM','plSEM','plEcl','plWd'].find(id=>!$(id).hidden); if(op){ const x=root.querySelector('[data-x="'+op+'"]')||$(op).querySelector('.plX'); if(x) x.click(); else $(op).hidden=true; return; } if(S.sel) select(null); else close(); return; }
+  const k=e.key; if(k==='Escape'){ /* one step back at a time: an open panel, then the selection, then the planetarium */ const op=['plCyc','plPol','plGM','plSEM','plEcl','plWd','plCS'].find(id=>!$(id).hidden); if(op){ const x=root.querySelector('[data-x="'+op+'"]')||$(op).querySelector('.plX'); if(x) x.click(); else $(op).hidden=true; return; } if(S.sel) select(null); else close(); return; }
   if(k===' '){ e.preventDefault(); play(!S.playing); return; }
   const st=S.fov/20; if(k==='ArrowLeft'){ S.az=(S.az-st+360)%360; } else if(k==='ArrowRight'){ S.az=(S.az+st)%360; } else if(k==='ArrowUp'){ S.alt=clamp(S.alt+st,-89.9,89.9); } else if(k==='ArrowDown'){ S.alt=clamp(S.alt-st,-89.9,89.9); }
   else if(k==='+'||k==='='){ S.fov=clamp(S.fov/1.25,0.01,210); } else if(k==='-'||k==='_'){ S.fov=clamp(S.fov*1.25,0.5,210); } else return; e.preventDefault(); kick(); });
@@ -8494,6 +8500,70 @@ cv.addEventListener('pointermove',e=>{ if(!WD.on) return; e.stopImmediatePropaga
 ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,e=>{ if(WD.on){ e.stopImmediatePropagation(); WD.drag=null; } },true));
 ['click','dblclick'].forEach(t=>cv.addEventListener(t,e=>{ if(WD.on) e.stopImmediatePropagation(); },true));
 cv.addEventListener('wheel',e=>{ if(!WD.on) return; e.stopImmediatePropagation(); e.preventDefault(); WD.fov=ecCl(WD.fov*Math.exp(e.deltaY*0.0015),0.02,110); kick(); },{capture:true,passive:false});
+
+/* ======================================================================== THE CELESTIAL SPHERE, FROM OUTSIDE
+   Every star and constellation placed on a sphere round a small Earth, in J2000 equatorial coordinates. The Earth turns inside it
+   (one turn per sidereal day, 23 h 56 min); the spin axis meets the sphere at the celestial poles, within 0.7° of Polaris in the north.
+   Seen from outside, the constellations are mirror images of the ones we see from inside. */
+var CSV={on:false,yaw:-0.6,pit:0.32,zoom:1,auto:true,tl:0,drag:null,tr:false,ln:true,nm:true,eq:true,hz:true,play:false};
+function csSet(on){ if(on){ try{ if(EC&&EC.on) ecSet(false); if(WD&&WD.on) wdSet(false); if(GM.on) gmSet(false); if(PP.on) ppOn(false); if(SEM.on) semOn(false); if(PCY.on){ cyOn(false); $('plCyc').hidden=true; } if(typeof c3eOff==='function') c3eOff(); if(typeof g3eOff==='function') g3eOff(); if(S.sel) select(null); }catch(err){} try{ window.__plFold&&window.__plFold(); }catch(e){} loadStars(); }
+  CSV.on=on; CSV.tl=0; $('plCSBtn').setAttribute('aria-pressed',String(on)); $('plCS').hidden=!on; root.classList.toggle('gmap',on||GM.on||EC.on||WD.on); kick(); }
+function csDraw(){ const fr=plFr(), cx=fr.r/2, cy=(70+fr.b-60)/2, R=Math.min(fr.r*0.38,(fr.b-60-70)/2/1.14)*CSV.zoom; sky();
+  g.setTransform(DPR,0,0,DPR,0,0); g.fillStyle='#03050b'; g.fillRect(0,0,W,H);
+  const cyw=Math.cos(CSV.yaw), syw=Math.sin(CSV.yaw), cp=Math.cos(CSV.pit), sp=Math.sin(CSV.pit);
+  /* view: turn about the pole by yaw, tip towards the viewer by pitch; screen x right, y up, d towards the viewer */
+  const V=v=>{ const x=v[0]*cyw-v[1]*syw, y=v[0]*syw+v[1]*cyw, z=v[2]; return [x, z*cp-y*sp, y*cp+z*sp]; };
+  const P=(v,r)=>{ const q=V(v); return [cx+q[0]*(r||R), cy-q[1]*(r||R), q[2]]; };
+  const al=d=>0.28+0.72*(d+1)/2;   /* far side fainter */
+  /* the sphere */
+  const sg=g.createRadialGradient(cx-R*0.3,cy-R*0.35,R*0.1,cx,cy,R); sg.addColorStop(0,'rgba(60,90,150,.10)'); sg.addColorStop(1,'rgba(40,60,110,.03)'); g.fillStyle=sg; g.beginPath(); g.arc(cx,cy,R,0,TAU); g.fill();
+  g.strokeStyle='rgba(170,200,255,.35)'; g.lineWidth=1.2; g.beginPath(); g.arc(cx,cy,R,0,TAU); g.stroke();
+  const circ=(fn,col,dash,w)=>{ g.lineWidth=w||1; for(let i=0;i<120;i++){ const a=fn(i/120*TAU), b=fn((i+1)/120*TAU), pa=P(a), pb=P(b); g.strokeStyle=col.replace('A',(al((pa[2]+pb[2])/2)).toFixed(2)); g.setLineDash(dash||[]); g.beginPath(); g.moveTo(pa[0],pa[1]); g.lineTo(pb[0],pb[1]); g.stroke(); } g.setLineDash([]); };
+  /* star trails: each star's daily circle round the axis, a short arc behind it */
+  if(STAR&&STAR.n){ const Vs=STAR.V, n=STAR.MG.length;
+    if(CSV.tr){ g.lineWidth=0.8; for(let i=0;i<n;i++){ const m=STAR.MG[i]; if(m>4.2) break; const x=Vs[3*i], y=Vs[3*i+1], z=Vs[3*i+2], rr=Math.hypot(x,y), a0=Math.atan2(y,x); g.strokeStyle='rgba(210,225,255,'+(0.10+0.12*(4.2-m)/5)+')'; g.beginPath(); for(let k=0;k<=12;k++){ const a=a0-k*0.06, p=P([rr*Math.cos(a),rr*Math.sin(a),z]); k?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.stroke(); } }
+  }
+  if(CSV.eq){ circ(a=>[Math.cos(a),Math.sin(a),0],'rgba(120,200,255,A)',[5,4],1.2);
+    const e=23.4393*D2R; circ(a=>[Math.cos(a),Math.sin(a)*Math.cos(e),Math.sin(a)*Math.sin(e)],'rgba(255,200,90,A)',[2,4],1.2); }
+  /* your horizon: the plane through the Earth's centre perpendicular to your zenith; everything above it is in your sky now */
+  if(CSV.hz&&ST&&ST.M){ const Z=ST.M[2], ref=Math.abs(Z[2])<0.9?[0,0,1]:[1,0,0], u=vun(vcr(Z,ref)), w=vcr(Z,u);
+    g.beginPath(); for(let i=0;i<=96;i++){ const a=i/96*TAU, p=P([u[0]*Math.cos(a)+w[0]*Math.sin(a),u[1]*Math.cos(a)+w[1]*Math.sin(a),u[2]*Math.cos(a)+w[2]*Math.sin(a)]); i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.closePath();
+    g.fillStyle='rgba(90,200,140,.07)'; g.fill(); g.strokeStyle='rgba(120,230,170,.5)'; g.lineWidth=1.2; g.stroke();
+    const pz=P(Z); g.strokeStyle='rgba(120,230,170,.6)'; g.setLineDash([2,3]); g.beginPath(); g.moveTo(cx,cy); g.lineTo(pz[0],pz[1]); g.stroke(); g.setLineDash([]); label('your zenith',pz[0]+6,pz[1],'rgba(140,235,180,.85)','500 11px Figtree,sans-serif'); }
+  /* constellation figures and names */
+  if(CSV.ln){ g.lineWidth=1; CLV.forEach(([id,segs])=>segs.forEach(sg2=>{ for(let i=0;i<sg2.length-1;i++){ const a=P(sg2[i]), b=P(sg2[i+1]); g.strokeStyle='rgba(150,190,255,'+(0.55*al((a[2]+b[2])/2)).toFixed(2)+')'; g.beginPath(); g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); g.stroke(); } })); }
+  if(STAR&&STAR.n){ const Vs=STAR.V, n=STAR.MG.length; for(let i=0;i<n;i++){ const m=STAR.MG[i]; if(m>5.2) break; const p=P([Vs[3*i],Vs[3*i+1],Vs[3*i+2]]), r=Math.max(0.5,2.6-0.42*m)*Math.sqrt(CSV.zoom);
+    g.globalAlpha=al(p[2])*Math.min(1,(5.6-m)/3); g.fillStyle='#fff'; g.beginPath(); g.arc(p[0],p[1],r,0,TAU); g.fill(); } g.globalAlpha=1; }
+  if(CSV.nm){ PD.cn.forEach(c=>{ if(c[4]>2) return; const p=P(c.v); if(p[2]<-0.15) return; label(c[1].toUpperCase(),p[0],p[1],'rgba(150,190,240,'+(0.35+0.45*al(p[2])).toFixed(2)+')','500 10px Figtree,sans-serif','center'); }); }
+  /* the Sun and the Moon where they are on the sphere now */
+  [['Sun','#ffd36b',5],['Moon','#e6e2d8',4]].forEach(([nm,col,r])=>{ const b=ST.bodies&&ST.bodies[nm]; if(!b) return; const p=P(vun(b.v)); g.globalAlpha=al(p[2]); g.fillStyle=col; g.beginPath(); g.arc(p[0],p[1],r,0,TAU); g.fill(); g.globalAlpha=1; label(nm,p[0]+r+4,p[1],col,'500 11px Figtree,sans-serif'); });
+  /* the spin axis and the poles */
+  const pn=P([0,0,1]), ps=P([0,0,-1]), pn2=P([0,0,1.12]), ps2=P([0,0,-1.12]);
+  g.strokeStyle='rgba(255,200,110,.85)'; g.lineWidth=1.4; g.setLineDash([5,4]); g.beginPath(); g.moveTo(ps2[0],ps2[1]); g.lineTo(pn2[0],pn2[1]); g.stroke(); g.setLineDash([]);
+  const gl=g.createRadialGradient(pn[0],pn[1],0,pn[0],pn[1],14); gl.addColorStop(0,'rgba(255,230,170,.95)'); gl.addColorStop(1,'rgba(255,230,170,0)'); g.fillStyle=gl; g.beginPath(); g.arc(pn[0],pn[1],14,0,TAU); g.fill();
+  label('North celestial pole · Polaris 0.7° away',pn2[0]+8,pn2[1],'#ffd28a','600 12px Figtree,sans-serif'); label('South celestial pole',ps2[0]+8,ps2[1],'rgba(255,210,140,.75)','500 11px Figtree,sans-serif');
+  /* the Earth, enlarged, turning: meridians at its real rotation angle; you are the green dot */
+  const rE=R*0.16, gm=PA.gmst(S.jd)*D2R, eg=g.createRadialGradient(cx-rE*0.35,cy-rE*0.35,rE*0.1,cx,cy,rE); eg.addColorStop(0,'#3b78c8'); eg.addColorStop(1,'#0e2a55'); g.fillStyle=eg; g.beginPath(); g.arc(cx,cy,rE,0,TAU); g.fill();
+  g.lineWidth=0.8; for(let k=0;k<12;k++){ const lo=gm+k*Math.PI/6; g.strokeStyle='rgba(170,210,255,.35)'; g.beginPath(); let st=0; for(let i=0;i<=24;i++){ const la=-Math.PI/2+i*Math.PI/24, v=[Math.cos(la)*Math.cos(lo),Math.cos(la)*Math.sin(lo),Math.sin(la)], p=P(v,rE); if(p[2]<0){ st=0; continue; } st++?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.stroke(); }
+  for(const la of [-60,-30,0,30,60]){ const L=la*D2R; g.strokeStyle=la?'rgba(170,210,255,.3)':'rgba(140,200,255,.8)'; g.beginPath(); let st=0; for(let i=0;i<=48;i++){ const a=i/48*TAU, p=P([Math.cos(L)*Math.cos(a),Math.cos(L)*Math.sin(a),Math.sin(L)],rE); if(p[2]<0){ st=0; continue; } st++?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); } g.stroke(); }
+  { const L=S.lat*D2R, lo=gm+S.lon*D2R, p=P([Math.cos(L)*Math.cos(lo),Math.cos(L)*Math.sin(lo),Math.sin(L)],rE); g.globalAlpha=p[2]<0?0.35:1; g.fillStyle='#7cffb0'; g.beginPath(); g.arc(p[0],p[1],3.5,0,TAU); g.fill(); g.globalAlpha=1; label('you, '+S.place.split(',')[0],p[0]+7,p[1]+10,'rgba(140,235,180,.9)','500 11px Figtree,sans-serif'); }
+  label('Earth (enlarged)',cx+rE+8,cy+rE*0.8,'rgba(170,210,255,.8)','500 11px Figtree,sans-serif');
+  g.textAlign='center'; g.font='300 22px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.92)'; g.fillText('The celestial sphere, from outside',cx,fr.b-34);
+  g.font='500 12px Figtree,system-ui,sans-serif'; g.fillStyle='rgba(236,230,218,.6)'; g.fillText(fmtD(S.jd)+' '+fmtT(S.jd)+' · seen from outside, every constellation is mirror-reversed · drag to turn, scroll to zoom',cx,fr.b-14); }
+window.__cs={CSV,csSet};
+$('plCSBtn').onclick=()=>csSet(!CSV.on);
+root.querySelector('[data-x="plCS"]').addEventListener('click',()=>csSet(false));
+['plGMBtn','plEclBtn','plWdBtn','plSemBtn','plCycBtn','plPolBtn','pl3dBtn','plExit'].forEach(id=>{ const b=$(id); if(b) b.addEventListener('click',()=>{ if(CSV.on) csSet(false); },true); });
+root.querySelectorAll('#plCS [data-cs]').forEach(c=>{ c.checked=!!CSV[c.dataset.cs]; c.onchange=()=>{ CSV[c.dataset.cs]=c.checked; kick(); }; });
+$('plCSN').onclick=()=>{ CSV.pit=Math.PI/2-0.001; CSV.yaw=0; CSV.auto=false; $('plCSauto').checked=false; kick(); };
+$('plCSSide').onclick=()=>{ CSV.pit=0.05; kick(); };
+$('plCSDef').onclick=()=>{ CSV.pit=0.32; CSV.yaw=-0.6; CSV.zoom=1; kick(); };
+$('plCSPlay').onclick=()=>{ CSV.play=!CSV.play; $('plCSPlay').textContent=CSV.play?'❚❚ Pause the Earth':'▶ Turn the Earth'; kick(); };
+cv.addEventListener('pointerdown',e=>{ if(!CSV.on) return; e.stopImmediatePropagation(); CSV.drag=[e.clientX,e.clientY]; try{ cv.setPointerCapture(e.pointerId); }catch(err){} },true);
+cv.addEventListener('pointermove',e=>{ if(!CSV.on) return; e.stopImmediatePropagation(); if(!CSV.drag) return; CSV.yaw+=(e.clientX-CSV.drag[0])*0.008; CSV.pit=Math.max(-Math.PI/2+0.01,Math.min(Math.PI/2-0.01,CSV.pit+(e.clientY-CSV.drag[1])*0.008)); CSV.drag=[e.clientX,e.clientY]; kick(); },true);
+['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,e=>{ if(CSV.on){ e.stopImmediatePropagation(); CSV.drag=null; } },true));
+['click','dblclick'].forEach(t=>cv.addEventListener(t,e=>{ if(CSV.on) e.stopImmediatePropagation(); },true));
+cv.addEventListener('wheel',e=>{ if(!CSV.on) return; e.stopImmediatePropagation(); e.preventDefault(); CSV.zoom=Math.max(0.5,Math.min(3,CSV.zoom*Math.exp(-e.deltaY*0.0015))); kick(); },{capture:true,passive:false});
 
 root.querySelector('[data-x="plPol"]').addEventListener('click',()=>ppOn(false));
 $('plPolY').addEventListener('input',e=>{ S.jd=ppJd(+e.target.value); kick(); ppInfo(); if(S.sel) info(); });
@@ -16524,7 +16594,7 @@ addEventListener('message',e=>{ if(e.data&&typeof e.data.univOpen==='string') un
  #plBar .plSep{margin:0 3px}
  #plSide{left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:230px}
  #plSide > section{position:static!important;left:auto!important;right:auto!important;top:auto!important;width:auto!important;max-height:none!important;overflow:visible!important;background:none!important;border:0!important;border-top:1px solid rgba(236,230,218,.14)!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:12px 0 0!important;margin:12px 0 0!important}
- #plSide,#plUp,#plLay,#plCyc,#plWh,#plGM,#plPol,#plSEM,#plEcl,#plWd{left:auto!important;right:12px!important;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))!important;max-height:calc(100% - 132px)}
+ #plSide,#plUp,#plLay,#plCyc,#plWh,#plGM,#plPol,#plSEM,#plEcl,#plWd,#plCS{left:auto!important;right:12px!important;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))!important;max-height:calc(100% - 132px)}
  #plSel{right:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:min(285px,calc(100vw - 24px))}
  #plSel h2{font-size:17px}
  #plSel dt,#plSel dd,.plDl dt,.plDl dd{padding:3px 0}
@@ -16611,7 +16681,7 @@ p.dcNote.dcShow{display:block!important;-webkit-line-clamp:unset!important}
  setInterval(()=>{ if(!document.hidden) scanDC(); },700); })();
 /* planetarium bar: the sky controls show only where they act; the modes are grouped into two menus */
 (function(){ const pr=id=>{ const b=document.getElementById(id); return !!b&&b.getAttribute('aria-pressed')==='true'; };
- const GR=[{k:'cyc',label:'Celestial Cycles',short:'Cycles',ids:['plCycBtn','plPolBtn','plEclBtn']},{k:'views',label:'Views from Space',short:'From Space',ids:['plSemBtn','plWdBtn']}];
+ const GR=[{k:'cyc',label:'Celestial Cycles',short:'Cycles',ids:['plCycBtn','plPolBtn','plEclBtn']},{k:'views',label:'Views from Space',short:'From Space',ids:['plCSBtn','plSemBtn','plWdBtn']}];
  let built=false, open=null;
  function close(){ if(open){ open.m.hidden=true; open.b.setAttribute('aria-expanded','false'); open=null; } }
  function build(){ const bar=document.getElementById('plBar'); if(!bar) return; const row=document.getElementById('plSideBtn'); if(!row) return; const grp=row.parentElement;
@@ -16642,8 +16712,8 @@ p.dcNote.dcShow{display:block!important;-webkit-line-clamp:unset!important}
  const SHN={'Augmented Reality':'AR','Tonight’s Sky':'Tonight','Sky Today':'Today','Views from Space':'From Space','Celestial Cycles':'Cycles','Planetary Scale':'Scale','Galactic Map':'Galaxy'}, SHV=new Set(Object.values(SHN));
  let skyHook=false;
  function hookSky(){ if(skyHook) return; skyHook=true; const ar=[...document.querySelectorAll('#plBar button')].find(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim()));
-  [document.getElementById('pl3dBtn'),document.getElementById('plAsMoon'),ar].forEach(b=>{ if(b) b.addEventListener('click',()=>{ ['plGMBtn','plEclBtn','plWdBtn','plSemBtn','plCycBtn','plPolBtn'].forEach(id=>{ const t=document.getElementById(id); if(t&&t.getAttribute('aria-pressed')==='true') t.click(); }); },true); });
-  ['plGMBtn','plEclBtn','plWdBtn','plSemBtn'].forEach(id=>{ const t=document.getElementById(id); if(t) t.addEventListener('click',()=>{ if(t.getAttribute('aria-pressed')==='true') return; const a=document.getElementById('plAsMoon'); let n=0; while(a&&a.getAttribute('aria-pressed')==='true'&&n++<9) a.click(); },true); }); }   /* full-screen views end the planet comparison */
+  [document.getElementById('pl3dBtn'),document.getElementById('plAsMoon'),ar].forEach(b=>{ if(b) b.addEventListener('click',()=>{ ['plGMBtn','plEclBtn','plWdBtn','plSemBtn','plCycBtn','plPolBtn','plCSBtn'].forEach(id=>{ const t=document.getElementById(id); if(t&&t.getAttribute('aria-pressed')==='true') t.click(); }); },true); });
+  ['plGMBtn','plEclBtn','plWdBtn','plSemBtn','plCSBtn'].forEach(id=>{ const t=document.getElementById(id); if(t) t.addEventListener('click',()=>{ if(t.getAttribute('aria-pressed')==='true') return; const a=document.getElementById('plAsMoon'); let n=0; while(a&&a.getAttribute('aria-pressed')==='true'&&n++<9) a.click(); },true); }); }   /* full-screen views end the planet comparison */
  function sync(){ const pl=document.getElementById('plan'); if(!pl||pl.hidden){ setTimeout(sync,500); return; } setTimeout(sync,90);   /* ~11 Hz while the planetarium is open, idle otherwise */ if(built) hookSky();
   if(window.__scaleSync) window.__scaleSync();
   { const a=document.getElementById('plAsMoon'); if(a&&sync.short){ const t=a.textContent; if(t.startsWith('Planetary Scale · ')) a.textContent='Scale · '+t.slice(18); else if(t==='Planetary Scale') a.textContent='Scale'; } }
@@ -16653,12 +16723,12 @@ p.dcNote.dcShow{display:block!important;-webkit-line-clamp:unset!important}
     if(g.scrollWidth>g.clientWidth+2){ for(const b of g.querySelectorAll('button, .plDDb>span')){ const t=b.textContent.trim(); if(SHN[t]||t.startsWith('Planetary Scale · ')){ sync.short=true; b.textContent=SHN[t]||('Scale · '+t.slice(18)); } } } }   /* all short or all full: no mixed row */
   if(true){ document.querySelectorAll('#plBar button, .plDDm button, .plDDb>span').forEach(b=>{ if(b.children.length&&b.tagName==='BUTTON') return; const t=b.textContent.trim(), r=NM[t]; if(r&&r!==t&&!(sync.short&&SHV.has(t))){ b.textContent=r; if(b.tagName==='BUTTON') b.dataset.nm=t; } }); } if(!built){ if([...document.querySelectorAll('#plBar button')].some(x=>/^(AR|Augmented Reality)$/.test(x.textContent.trim()))||performance.now()>8000) build(); if(!built) return; }
   GR.forEach(G=>{ const act=[...G.m.querySelectorAll('button')].find(x=>x.getAttribute('aria-pressed')==='true'); const t=sync.short?G.short:(act?act.textContent.trim():G.label); const sp=G.b.firstChild; if(sp.textContent!==t) sp.textContent=t; G.b.setAttribute('aria-pressed',String(!!act)); });
-  const takeover=pr('plGMBtn')||pr('plEclBtn')||pr('plWdBtn')||pr('plSemBtn'), own=pr('plCycBtn')||pr('plPolBtn');
+  const takeover=pr('plGMBtn')||pr('plEclBtn')||pr('plWdBtn')||pr('plSemBtn')||pr('plCSBtn'), own=pr('plCycBtn')||pr('plPolBtn');
   const bar=document.getElementById('plBar'), tg=bar&&bar.querySelector('[aria-label="Time"]'), vg=bar&&bar.querySelector('[aria-label="View"]');
   if(tg){ const d=(takeover||own)?'none':''; if(tg.style.display!==d) tg.style.display=d; } if(vg){ const d=takeover?'none':''; if(vg.style.display!==d) vg.style.display=d; } }
  setTimeout(sync,300); })();
 /* planetarium, wide screens: one right-hand column; the object card on top, the open tool panel under it, sharing the height */
-(function(){ const IDS=['plSide','plCyc','plGM','plPol','plSEM','plEcl','plWd'];
+(function(){ const IDS=['plSide','plCyc','plGM','plPol','plSEM','plEcl','plWd','plCS'];
  function lay(){ const pl=document.getElementById('plan'); if(!pl||pl.hidden){ setTimeout(lay,500); return; } setTimeout(lay,70); const wide=innerWidth>=721, sel=document.getElementById('plSel');
   const H=pl.clientHeight, top0=12, selOn=sel&&!sel.hidden&&sel.offsetParent!==null;
   const open=IDS.map(i=>document.getElementById(i)).filter(e=>e&&!e.hidden&&e.offsetParent!==null&&getComputedStyle(e).display!=='none');
