@@ -33,8 +33,8 @@
               nebula: '#191E2C',     
             },
             glowred: {
-              DEFAULT: '#FF334B',    
-              soft: 'rgba(255, 51, 75, 0.15)',
+              DEFAULT: '#5EEFB8',    
+              soft: 'rgba(94, 239, 184, 0.15)',
               gold: '#FFD700',
               cyan: '#00F0FF',
               darkred: '#7B1F1F'
@@ -84,8 +84,8 @@
 
   <style>
     :root {
-      --theme-primary: #FF334B;
-      --theme-primary-soft: rgba(255, 51, 75, 0.15);
+      --theme-primary: #5EEFB8;
+      --theme-primary-soft: rgba(94, 239, 184, 0.15);
     }
     :root.light-mode {
       --theme-primary: #7B1F1F;
@@ -97,6 +97,7 @@
     h1, h2, h3, h4, h5, .font-display { font-family: 'Space Grotesk', system-ui, sans-serif; }
 
     ::selection { background: var(--theme-primary); color: white; }
+    :root:not(.light-mode) ::selection { color: #062a1f; }
     :focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 4px; }
     
     .hero-orb {
@@ -1063,7 +1064,7 @@ float sn3(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1
             }
             return y;
           };
-          const gasRGB = isDarkNow ? '255, 60, 55' : '190, 25, 25';
+          const gasRGB = isDarkNow ? '94, 239, 184' : '190, 25, 25';
           // Gas is present all along, but faint before impact: shock heating at
           // collision makes it X-ray bright, and it stays hot afterwards.
           const heat = 0.3 + 0.7 * Math.max(shock, S);
@@ -1201,7 +1202,7 @@ float sn3(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1
               worldZ = (isPrimary ? z1 : z2) + Math.sin(p.theta) * (r * 0.65) * (1 + 0.45 * shock);
               worldY = Math.sin(p.theta * 2 + elapsed * 1.2) * 25 * (1 - S * 0.5);
               if (isDarkNow) {
-                customColor = p.colorVariant < 0.5 ? '255, 51, 75' : p.colorVariant < 0.8 ? '255, 105, 180' : '255, 175, 50';
+                customColor = p.colorVariant < 0.5 ? '94, 239, 184' : p.colorVariant < 0.8 ? '170, 248, 220' : '255, 175, 50';
               } else {
                 customColor = p.colorVariant < 0.5 ? '180, 25, 45' : p.colorVariant < 0.8 ? '150, 40, 110' : '180, 90, 10';
               }
@@ -1277,7 +1278,7 @@ float sn3(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1
               ctx.drawImage(galaxySprite(isDarkNow ? (p.morph === 3 ? '255, 245, 225' : '245, 248, 255') : (p.morph === 3 ? '255, 225, 40' : '255, 255, 255'), customColor, p.morph), -gr, -gr, gr * 2, gr * 2);
               if (redshift < 0.97) {
                 ctx.globalAlpha = sceneAlpha * finalAlpha * (1 - redshift) * 0.9;
-                ctx.drawImage(galaxySprite(isDarkNow ? '255, 150, 90' : '170, 40, 20', isDarkNow ? '255, 70, 40' : '150, 30, 20', p.morph), -gr, -gr, gr * 2, gr * 2);
+                ctx.drawImage(galaxySprite(isDarkNow ? '170, 248, 220' : '170, 40, 20', isDarkNow ? '46, 196, 140' : '150, 30, 20', p.morph), -gr, -gr, gr * 2, gr * 2);
               }
               ctx.restore();
             } else if (finalAlpha > 0.01) {
@@ -1601,9 +1602,8 @@ float sn3(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1
                   <i className={`fa-solid ${isMenuOpen ? 'fa-xmark' : 'fa-bars'} text-xs`}></i>
                 </button>
 
-                <button onClick={() => setIsDark(!isDark)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${isDark ? 'bg-white/[0.035] border-white/[0.14] text-zinc-300 hover:border-glowred/50 hover:text-glowred' : 'bg-[#FDFBF5]/85 border-stone-300 text-stone-600 hover:border-darkred-300 hover:text-darkred-800'}`} title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-                  <i className={`fa-solid ${isDark ? 'fa-sun text-yellow-400' : 'fa-moon text-darkred-700'}`}></i>
-                  <span className="hidden sm:inline font-display">{isDark ? 'Light' : 'Dark'}</span>
+                <button type="button" onClick={() => setIsDark(!isDark)} aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Switch to light mode" : "Switch to dark mode"} className={`w-9 h-9 flex items-center justify-center rounded-full border transition-all ${isDark ? 'bg-white/[0.035] border-white/[0.14] hover:border-glowred/50' : 'bg-[#FDFBF5]/85 border-stone-300 hover:border-darkred-300'}`}>
+                  <i aria-hidden="true" className={`fa-solid text-sm ${isDark ? 'fa-sun text-yellow-400' : 'fa-moon text-darkred-700'}`}></i>
                 </button>
 
               </div>
@@ -1650,7 +1650,7 @@ float sn3(vec3 v){const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1
                     {/* Three tiers, not three buttons: filled primary, outlined secondary,
                         bare text link — so the eye lands on Publications first. */}
                     <div className="mt-9 flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-3">
-                      <a href="#publications" onClick={(e) => navigateTo(e, 'home', 'publications')} className={`px-6 py-3 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap transition-all shadow-lg flex items-center gap-2 ${isDark ? 'bg-[#B3202F] text-white hover:bg-[#8F1A26] shadow-[#B3202F]/20 glow-hover' : 'bg-[#B3202F] text-white hover:bg-[#8F1A26] shadow-[#B3202F]/20 glow-hover'}`}>
+                      <a href="#publications" onClick={(e) => navigateTo(e, 'home', 'publications')} className={`px-6 py-3 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap transition-all shadow-lg flex items-center gap-2 ${isDark ? 'bg-[#5EEFB8] text-[#062a1f] hover:bg-[#3FD9A0] shadow-[#5EEFB8]/20 glow-hover' : 'bg-[#B3202F] text-white hover:bg-[#8F1A26] shadow-[#B3202F]/20 glow-hover'}`}>
                         Selected Research
                       </a>
                       <a href={CV_URL} target="_blank" rel="noopener noreferrer" className={`px-6 py-3 rounded-full border text-xs font-semibold tracking-wide whitespace-nowrap transition-all flex items-center gap-2 backdrop-blur-md ${isDark ? 'bg-white/[0.035] text-zinc-300 border-white/[0.14] hover:border-glowred/50 hover:text-glowred' : 'bg-[#FDFBF5]/85 text-stone-600 border-stone-200 hover:border-darkred-300 hover:text-darkred-800'}`}>
